@@ -8,9 +8,9 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_AI_ENTITY,
-    CONF_LISTS,
-    CONF_LIST_NAME,
-    CONF_LIST_TAGS,
+    CONF_COLLECTIONS,
+    CONF_COLLECTION_NAME,
+    CONF_COLLECTION_TAGS,
     CONF_PLAYLIST_EXCLUDE_LIVE,
     CONF_PLAYLIST_HISTORY_DEPTH,
     CONF_PLAYLIST_NAME,
@@ -72,7 +72,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
         self._edit_slug: str | None = None
-        self._editing_list_idx: int | None = None
+        self._editing_collection_idx: int | None = None
 
     async def async_step_init(self, user_input=None):
         """Show the main menu."""
@@ -83,9 +83,9 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                 "edit_playlist",
                 "delete_playlist",
                 "import_playlists",
-                "add_list",
-                "edit_list",
-                "delete_list",
+                "add_collection",
+                "edit_collection",
+                "delete_collection",
                 "edit_system_prompt",
             ],
         )
@@ -258,18 +258,18 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
             ),
         )
 
-    async def async_step_add_list(self, user_input=None):
-        """Add a new list."""
+    async def async_step_add_collection(self, user_input=None):
+        """Add a new collection."""
         if user_input is not None:
-            name = user_input[CONF_LIST_NAME].strip()
-            tags_raw = user_input.get(CONF_LIST_TAGS, "")
+            name = user_input[CONF_COLLECTION_NAME].strip()
+            tags_raw = user_input.get(CONF_COLLECTION_TAGS, "")
             tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
 
-            lists = list(self.config_entry.options.get(CONF_LISTS, []))
-            lists.append({CONF_LIST_NAME: name, CONF_LIST_TAGS: tags})
+            collections = list(self.config_entry.options.get(CONF_COLLECTIONS, []))
+            collections.append({CONF_COLLECTION_NAME: name, CONF_COLLECTION_TAGS: tags})
 
             new_options = dict(self.config_entry.options)
-            new_options[CONF_LISTS] = lists
+            new_options[CONF_COLLECTIONS] = collections
             self.hass.config_entries.async_update_entry(
                 self.config_entry, options=new_options
             )
@@ -279,52 +279,52 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(data=new_options)
 
         return self.async_show_form(
-            step_id="add_list",
+            step_id="add_collection",
             data_schema=vol.Schema({
-                vol.Required(CONF_LIST_NAME): selector.TextSelector(),
-                vol.Required(CONF_LIST_TAGS): selector.TextSelector(
+                vol.Required(CONF_COLLECTION_NAME): selector.TextSelector(),
+                vol.Required(CONF_COLLECTION_TAGS): selector.TextSelector(
                     selector.TextSelectorConfig(multiline=False)
                 ),
             }),
-            description_placeholders={"tag_hint": "Comma-separated, e.g.: Genre, Bob's Office"},
+            description_placeholders={"tag_hint": "Comma-separated, e.g.: Genre, Classical"},
         )
 
-    async def async_step_edit_list(self, user_input=None):
-        """Select a list to edit."""
-        lists = self.config_entry.options.get(CONF_LISTS, [])
-        if not lists:
-            return self.async_abort(reason="no_lists")
+    async def async_step_edit_collection(self, user_input=None):
+        """Select a collection to edit."""
+        collections = self.config_entry.options.get(CONF_COLLECTIONS, [])
+        if not collections:
+            return self.async_abort(reason="no_collections")
 
         if user_input is not None:
-            self._editing_list_idx = int(user_input["list_index"])
-            return await self.async_step_edit_list_form()
+            self._editing_collection_idx = int(user_input["collection_index"])
+            return await self.async_step_edit_collection_form()
 
-        list_names = {str(i): cfg[CONF_LIST_NAME] for i, cfg in enumerate(lists)}
+        collection_names = {str(i): cfg[CONF_COLLECTION_NAME] for i, cfg in enumerate(collections)}
         return self.async_show_form(
-            step_id="edit_list",
+            step_id="edit_collection",
             data_schema=vol.Schema({
-                vol.Required("list_index"): selector.SelectSelector(
+                vol.Required("collection_index"): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=[
-                        selector.SelectOptionDict(value=k, label=v) for k, v in list_names.items()
+                        selector.SelectOptionDict(value=k, label=v) for k, v in collection_names.items()
                     ])
                 ),
             }),
         )
 
-    async def async_step_edit_list_form(self, user_input=None):
-        """Edit a selected list."""
-        lists = list(self.config_entry.options.get(CONF_LISTS, []))
-        current = lists[self._editing_list_idx]
+    async def async_step_edit_collection_form(self, user_input=None):
+        """Edit a selected collection."""
+        collections = list(self.config_entry.options.get(CONF_COLLECTIONS, []))
+        current = collections[self._editing_collection_idx]
 
         if user_input is not None:
-            name = user_input[CONF_LIST_NAME].strip()
-            tags_raw = user_input.get(CONF_LIST_TAGS, "")
+            name = user_input[CONF_COLLECTION_NAME].strip()
+            tags_raw = user_input.get(CONF_COLLECTION_TAGS, "")
             tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
 
-            lists[self._editing_list_idx] = {CONF_LIST_NAME: name, CONF_LIST_TAGS: tags}
+            collections[self._editing_collection_idx] = {CONF_COLLECTION_NAME: name, CONF_COLLECTION_TAGS: tags}
 
             new_options = dict(self.config_entry.options)
-            new_options[CONF_LISTS] = lists
+            new_options[CONF_COLLECTIONS] = collections
             self.hass.config_entries.async_update_entry(
                 self.config_entry, options=new_options
             )
@@ -332,27 +332,27 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(data=new_options)
 
         return self.async_show_form(
-            step_id="edit_list_form",
+            step_id="edit_collection_form",
             data_schema=vol.Schema({
-                vol.Required(CONF_LIST_NAME, default=current[CONF_LIST_NAME]): selector.TextSelector(),
-                vol.Required(CONF_LIST_TAGS, default=", ".join(current.get(CONF_LIST_TAGS, []))): selector.TextSelector(
+                vol.Required(CONF_COLLECTION_NAME, default=current[CONF_COLLECTION_NAME]): selector.TextSelector(),
+                vol.Required(CONF_COLLECTION_TAGS, default=", ".join(current.get(CONF_COLLECTION_TAGS, []))): selector.TextSelector(
                     selector.TextSelectorConfig(multiline=False)
                 ),
             }),
         )
 
-    async def async_step_delete_list(self, user_input=None):
-        """Delete a list."""
-        lists = list(self.config_entry.options.get(CONF_LISTS, []))
-        if not lists:
-            return self.async_abort(reason="no_lists")
+    async def async_step_delete_collection(self, user_input=None):
+        """Delete a collection."""
+        collections = list(self.config_entry.options.get(CONF_COLLECTIONS, []))
+        if not collections:
+            return self.async_abort(reason="no_collections")
 
         if user_input is not None:
-            idx = int(user_input["list_index"])
-            lists.pop(idx)
+            idx = int(user_input["collection_index"])
+            collections.pop(idx)
 
             new_options = dict(self.config_entry.options)
-            new_options[CONF_LISTS] = lists
+            new_options[CONF_COLLECTIONS] = collections
             self.hass.config_entries.async_update_entry(
                 self.config_entry, options=new_options
             )
@@ -360,13 +360,13 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             return self.async_create_entry(data=new_options)
 
-        list_names = {str(i): cfg[CONF_LIST_NAME] for i, cfg in enumerate(lists)}
+        collection_names = {str(i): cfg[CONF_COLLECTION_NAME] for i, cfg in enumerate(collections)}
         return self.async_show_form(
-            step_id="delete_list",
+            step_id="delete_collection",
             data_schema=vol.Schema({
-                vol.Required("list_index"): selector.SelectSelector(
+                vol.Required("collection_index"): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=[
-                        selector.SelectOptionDict(value=k, label=v) for k, v in list_names.items()
+                        selector.SelectOptionDict(value=k, label=v) for k, v in collection_names.items()
                     ])
                 ),
             }),
