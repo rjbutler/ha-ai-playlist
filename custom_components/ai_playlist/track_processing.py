@@ -3,6 +3,7 @@
 Pure functions for normalizing, parsing, and filtering tracks.
 No Home Assistant dependencies — fully testable standalone.
 """
+import json
 import re
 
 
@@ -88,6 +89,56 @@ def split_track(track: str) -> tuple[str, str]:
         parts = re.split(r"\s*-\s*", normalized, maxsplit=1)
         return (parts[0].strip(), parts[1].strip() if len(parts) > 1 else "")
     return (track_only.strip(), "")
+
+
+def parse_json_tracks(raw_text: str | None) -> list[dict]:
+    """Parse a JSON array of track objects from LLM output.
+
+    Expected format: [{"artist": "...", "title": "...", "album": "..."}]
+    Album is optional. Entries missing artist or title are skipped.
+
+    Raises ValueError if the text is not valid JSON, not a list,
+    or contains no valid track entries.
+    """
+    if not raw_text or not raw_text.strip():
+        raise ValueError("Empty response")
+
+    text = raw_text.strip()
+
+    # Strip markdown code fences
+    text = re.sub(r"^```(?:json)?\s*\n?", "", text)
+    text = re.sub(r"\n?```\s*$", "", text)
+    text = text.strip()
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON: {exc}") from exc
+
+    if not isinstance(data, list):
+        raise ValueError(f"Expected JSON array, got {type(data).__name__}")
+
+    tracks = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        artist = entry.get("artist", "")
+        title = entry.get("title", "")
+        if isinstance(artist, str):
+            artist = artist.strip()
+        if isinstance(title, str):
+            title = title.strip()
+        if not artist or not title:
+            continue
+        album = entry.get("album", "")
+        if isinstance(album, str):
+            album = album.strip()
+        tracks.append({"artist": artist, "title": title, "album": album or ""})
+
+    if not tracks:
+        raise ValueError("No valid tracks in JSON response")
+
+    return tracks
 
 
 # Regex for lines that look like chain-of-thought rather than tracks

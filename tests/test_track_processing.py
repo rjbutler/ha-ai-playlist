@@ -5,6 +5,7 @@ from custom_components.ai_playlist.track_processing import (
     filter_tracks,
     normalize_track,
     parse_ai_response,
+    parse_json_tracks,
     split_track,
     strip_album,
     track_dict_to_string,
@@ -171,6 +172,93 @@ class TestTrackDictToString:
     def test_whitespace_stripped(self):
         result = track_dict_to_string({"artist": " Jay-Z ", "title": " 99 Problems ", "album": " The Black Album "})
         assert result == "Jay-Z - 99 Problems | The Black Album"
+
+
+# ── parse_json_tracks ────────────────────────────────────────────
+
+
+class TestParseJsonTracks:
+    def test_valid_json(self):
+        raw = '[{"artist": "Miles Davis", "title": "So What", "album": "Kind of Blue"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+        assert result[0] == {"artist": "Miles Davis", "title": "So What", "album": "Kind of Blue"}
+
+    def test_missing_album_defaults_empty(self):
+        raw = '[{"artist": "Radiohead", "title": "Creep"}]'
+        result = parse_json_tracks(raw)
+        assert result[0]["album"] == ""
+
+    def test_multiple_tracks(self):
+        raw = '[{"artist": "Jay-Z", "title": "99 Problems", "album": "The Black Album"}, {"artist": "Radiohead", "title": "Creep"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 2
+        assert result[0]["artist"] == "Jay-Z"
+        assert result[1]["artist"] == "Radiohead"
+
+    def test_code_fenced_json(self):
+        raw = '```json\n[{"artist": "Miles Davis", "title": "So What"}]\n```'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+        assert result[0]["artist"] == "Miles Davis"
+
+    def test_code_fenced_no_language(self):
+        raw = '```\n[{"artist": "Miles Davis", "title": "So What"}]\n```'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+
+    def test_invalid_json_raises(self):
+        with pytest.raises(ValueError):
+            parse_json_tracks("not json at all")
+
+    def test_not_a_list_raises(self):
+        with pytest.raises(ValueError):
+            parse_json_tracks('{"artist": "X", "title": "Y"}')
+
+    def test_empty_array_raises(self):
+        with pytest.raises(ValueError):
+            parse_json_tracks("[]")
+
+    def test_missing_artist_skipped(self):
+        raw = '[{"title": "So What", "album": "Kind of Blue"}, {"artist": "Jay-Z", "title": "99 Problems"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+        assert result[0]["artist"] == "Jay-Z"
+
+    def test_missing_title_skipped(self):
+        raw = '[{"artist": "Miles Davis", "album": "Kind of Blue"}, {"artist": "Jay-Z", "title": "99 Problems"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+
+    def test_empty_artist_skipped(self):
+        raw = '[{"artist": "", "title": "So What"}, {"artist": "Jay-Z", "title": "99 Problems"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+
+    def test_all_entries_invalid_raises(self):
+        raw = '[{"title": "So What"}, {"artist": "", "title": ""}]'
+        with pytest.raises(ValueError):
+            parse_json_tracks(raw)
+
+    def test_none_raises(self):
+        with pytest.raises(ValueError):
+            parse_json_tracks(None)
+
+    def test_empty_string_raises(self):
+        with pytest.raises(ValueError):
+            parse_json_tracks("")
+
+    def test_extra_fields_ignored(self):
+        raw = '[{"artist": "Miles Davis", "title": "So What", "album": "Kind of Blue", "year": 1959}]'
+        result = parse_json_tracks(raw)
+        assert result[0] == {"artist": "Miles Davis", "title": "So What", "album": "Kind of Blue"}
+
+    def test_whitespace_stripped(self):
+        raw = '[{"artist": " Jay-Z ", "title": " 99 Problems ", "album": " The Black Album "}]'
+        result = parse_json_tracks(raw)
+        assert result[0]["artist"] == "Jay-Z"
+        assert result[0]["title"] == "99 Problems"
+        assert result[0]["album"] == "The Black Album"
 
 
 # ── parse_ai_response ────────────────────────────────────────────
