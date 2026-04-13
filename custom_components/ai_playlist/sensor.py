@@ -72,9 +72,9 @@ class AiPlaylistStateSensor(SensorEntity, RestoreEntity):
         self._attr_name = f"AI Playlist {suffix.replace('_', ' ').title()}"
         self._attr_native_value = STATE_IDLE
         self._attr_extra_state_attributes = {
-            "list": None,
+            "collection": None,
             "selected": None,
-            "selected_list": None,
+            "selected_collection": None,
             "media_player": media_player_entity_id,
         }
 
@@ -85,7 +85,7 @@ class AiPlaylistStateSensor(SensorEntity, RestoreEntity):
         if last_state and last_state.state not in (None, "unavailable", "unknown"):
             self._attr_native_value = last_state.state
             attrs = dict(self._attr_extra_state_attributes)
-            for key in ("list", "selected", "selected_list"):
+            for key in ("collection", "selected", "selected_collection"):
                 if key in last_state.attributes:
                     attrs[key] = last_state.attributes[key]
             self._attr_extra_state_attributes = attrs
@@ -100,20 +100,20 @@ class AiPlaylistStateSensor(SensorEntity, RestoreEntity):
     def update_playback(
         self,
         playlist_name: str | None,
-        list_name: str | None = None,
+        collection_name: str | None = None,
     ) -> None:
         """Update sensor when playback starts or changes."""
         if playlist_name:
             self._attr_native_value = playlist_name
             attrs = dict(self._attr_extra_state_attributes)
-            attrs["list"] = list_name
+            attrs["collection"] = collection_name
             attrs["selected"] = playlist_name
-            attrs["selected_list"] = list_name
+            attrs["selected_collection"] = collection_name
             self._attr_extra_state_attributes = attrs
         else:
             self._attr_native_value = STATE_IDLE
             attrs = dict(self._attr_extra_state_attributes)
-            attrs["list"] = None
+            attrs["collection"] = None
             self._attr_extra_state_attributes = attrs
         self._safe_write_state()
 
@@ -121,13 +121,13 @@ class AiPlaylistStateSensor(SensorEntity, RestoreEntity):
     def update_selection(
         self,
         playlist_name: str,
-        list_name: str | None = None,
+        collection_name: str | None = None,
     ) -> None:
         """Update selected playlist without changing playback state."""
         attrs = dict(self._attr_extra_state_attributes)
         attrs["selected"] = playlist_name
-        if list_name is not None:
-            attrs["selected_list"] = list_name
+        if collection_name is not None:
+            attrs["selected_collection"] = collection_name
         self._attr_extra_state_attributes = attrs
         self._safe_write_state()
 
@@ -136,6 +136,6 @@ class AiPlaylistStateSensor(SensorEntity, RestoreEntity):
         """Mark sensor as idle (coordinator stopped)."""
         self._attr_native_value = STATE_IDLE
         attrs = dict(self._attr_extra_state_attributes)
-        attrs["list"] = None
+        attrs["collection"] = None
         self._attr_extra_state_attributes = attrs
         self._safe_write_state()
