@@ -7,7 +7,6 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
-    CONF_AI_ENTITY,
     DEFAULT_HISTORY_DEPTH,
     DEFAULT_REFILL_THRESHOLD,
     DEFAULT_TRACK_COUNT,
@@ -45,8 +44,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    ai_entity_id = entry.data.get(CONF_AI_ENTITY, "")
-
     async def _resurrect_sessions() -> None:
         """Attempt to re-attach coordinators to sessions that survived HA restart."""
         active_sessions = store.get_active_sessions()
@@ -72,7 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 store=store,
                 playlist_config=config,
                 entity_id=entity_id,
-                ai_entity_id=ai_entity_id,
+                entry=entry,
             )
 
             confidence = await coordinator._assess_resurrection_confidence()
@@ -204,7 +201,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             store=store,
             playlist_config=config,
             entity_id=entity_id,
-            ai_entity_id=ai_entity_id,
+            entry=entry,
         )
         coordinators[entity_id] = coordinator
 
