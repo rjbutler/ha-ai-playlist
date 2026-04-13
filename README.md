@@ -44,9 +44,20 @@ Named prompt + settings combinations. Each playlist has:
 
 You can also **import playlists from YAML** — paste a YAML list with `name` and `prompt` fields.
 
-### Lists
+### Playlist Collections
 
-Tag-filtered select entities. Create a list by giving it a name and comma-separated tags. The integration creates a `select.ai_playlist_*` entity populated with all playlists matching those tags. Useful for dashboards — users pick from a dropdown, then a script calls `ai_playlist.play`.
+A collection is a named group of playlists filtered by tags, exposed as a Home Assistant `select` entity. Use collections to organize playlists into categories for dashboards, physical controls, or automations.
+
+**Why use collections?** If you have dozens of playlists, you probably don't want a single massive dropdown. Collections let you group playlists by tag (e.g., "Genre", "Mood", "Classical") so each dropdown shows only the relevant subset.
+
+**How they work:** Create a collection in the options flow by giving it a name and comma-separated tags. The integration creates a `select.ai_playlist_*` entity whose options are all playlists matching those tags. When a user picks a playlist from the dropdown, it stages that selection — call `ai_playlist.play` (without a `playlist` argument) to start playback.
+
+**Important:** Changing the dropdown selection only stages the playlist. It does not automatically start playback. You need a separate trigger (button press, automation, script) that calls `ai_playlist.play`.
+
+| Setting | Description |
+|---|---|
+| Name | Display name (becomes the entity name) |
+| Tags | Comma-separated tags — the dropdown shows playlists matching ALL tags |
 
 ### System Prompt
 
@@ -65,7 +76,7 @@ Start an AI-generated playlist on a media player.
 | `prompt` | no | Ad-hoc prompt (used if no playlist specified) |
 | `track_count` | no | Override tracks per generation |
 | `clear_queue` | no | Clear existing queue first (default: true) |
-| `list` | no | List name for state tracking |
+| `collection` | no | Collection name for state tracking |
 
 If neither `playlist` nor `prompt` is provided, plays the currently selected playlist (set via `ai_playlist.select`).
 
@@ -85,7 +96,7 @@ Set the "up next" playlist for a media player without starting playback.
 |---|---|---|
 | `entity_id` | yes | Media player |
 | `playlist` | yes | Playlist name to select |
-| `list` | no | List/category name |
+| `collection` | no | Collection name |
 
 ### `ai_playlist.clear_history`
 
@@ -103,6 +114,74 @@ Returns all configured playlists. Supports response data.
 |---|---|---|
 | `tag` | no | Filter by single tag |
 | `tags` | no | Filter by multiple tags (AND logic) |
+
+## Examples
+
+### Play a playlist on a speaker
+
+The simplest use — play a named playlist on a specific media player:
+
+```yaml
+# Script: Morning music
+sequence:
+  - action: ai_playlist.play
+    data:
+      entity_id: media_player.kitchen_speaker
+      playlist: "Baroque Instrumental"
+      clear_queue: true
+```
+
+### Dashboard: collection dropdown + play button
+
+Use a collection select entity as a dashboard dropdown, paired with a script that plays whatever is selected:
+
+```yaml
+# Script: Play selected playlist
+sequence:
+  - variables:
+      playlist_name: "{{ states('select.ai_playlist_genre_playlists') }}"
+  - action: ai_playlist.play
+    data:
+      entity_id: media_player.office_speaker
+      playlist: "{{ playlist_name }}"
+      collection: "Genre Playlists"
+      clear_queue: true
+```
+
+Add the select entity and a button to your dashboard:
+
+```yaml
+# Dashboard card (minimal example)
+type: entities
+entities:
+  - entity: select.ai_playlist_genre_playlists
+  - type: button
+    name: Play
+    tap_action:
+      action: perform-action
+      perform_action: script.play_selected_playlist
+```
+
+### Random pick from a collection
+
+Pick a random playlist from a collection and play it — useful for physical buttons or "surprise me" automations:
+
+```yaml
+# Script: Play random playlist from a collection
+sequence:
+  - variables:
+      options: "{{ state_attr('select.ai_playlist_genre_playlists', 'options') | list }}"
+      random_pick: "{{ options | random }}"
+  - action: ai_playlist.select
+    data:
+      entity_id: media_player.office_speaker
+      playlist: "{{ random_pick }}"
+      collection: "Genre Playlists"
+  - action: ai_playlist.play
+    data:
+      entity_id: media_player.office_speaker
+      clear_queue: true
+```
 
 ## How It Works
 
