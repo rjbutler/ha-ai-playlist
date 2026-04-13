@@ -32,7 +32,7 @@ class PlaylistStore:
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY_PLAYLISTS)
         self._sessions_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_SESSIONS)
         self._playlists: dict[str, dict] = {}
-        self._active_sessions: dict[str, dict] = {}  # entity_id -> {playlist_name, list_name}
+        self._active_sessions: dict[str, dict] = {}  # entity_id -> {playlist_name, collection_name}
         self._known_players: list[str] = []
         self._history_dir = os.path.join(hass.config.path(".storage"), "ai_playlist", "history")
 
@@ -223,12 +223,12 @@ class PlaylistStore:
     # --- Session persistence ---
 
     async def set_active_session(
-        self, entity_id: str, playlist_name: str, list_name: str | None = None
+        self, entity_id: str, playlist_name: str, collection_name: str | None = None
     ) -> None:
         """Record an active coordinator session for resurrection after restart."""
         self._active_sessions[entity_id] = {
             "playlist_name": playlist_name,
-            "list_name": list_name,
+            "collection_name": collection_name,
         }
         if entity_id not in self._known_players:
             self._known_players.append(entity_id)
