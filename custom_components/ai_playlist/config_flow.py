@@ -17,10 +17,12 @@ from .const import (
     CONF_PLAYLIST_PROMPT,
     CONF_PLAYLIST_REFILL_THRESHOLD,
     CONF_PLAYLIST_TRACK_COUNT,
+    CONF_SYSTEM_PROMPT,
     DEFAULT_HISTORY_DEPTH,
     DEFAULT_REFILL_THRESHOLD,
     DEFAULT_TRACK_COUNT,
     DOMAIN,
+    SYSTEM_PROMPT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,6 +86,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                 "add_list",
                 "edit_list",
                 "delete_list",
+                "edit_system_prompt",
             ],
         )
 
@@ -367,6 +370,33 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                     ])
                 ),
             }),
+        )
+
+    async def async_step_edit_system_prompt(self, user_input=None):
+        """Edit the system prompt used for AI track generation."""
+        if user_input is not None:
+            new_options = dict(self.config_entry.options)
+            new_options[CONF_SYSTEM_PROMPT] = user_input[CONF_SYSTEM_PROMPT]
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, options=new_options
+            )
+            return self.async_create_entry(data=new_options)
+
+        current_prompt = self.config_entry.options.get(
+            CONF_SYSTEM_PROMPT, SYSTEM_PROMPT
+        )
+
+        return self.async_show_form(
+            step_id="edit_system_prompt",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_SYSTEM_PROMPT, default=current_prompt
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(multiline=True)
+                    ),
+                }
+            ),
         )
 
     async def _refresh_select_entities(self):

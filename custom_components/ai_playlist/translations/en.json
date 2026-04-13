@@ -24,7 +24,8 @@
           "import_playlists": "Import playlists from YAML",
           "add_list": "Add list",
           "edit_list": "Edit list",
-          "delete_list": "Delete list"
+          "delete_list": "Delete list",
+          "edit_system_prompt": "Edit system prompt"
         }
       },
       "add_playlist": {
@@ -93,6 +94,13 @@
         "title": "Delete List",
         "data": {
           "list_index": "Select list to delete"
+        }
+      },
+      "edit_system_prompt": {
+        "title": "Edit System Prompt",
+        "description": "Customize the instructions sent to the AI when generating tracks. The AI must output one track per line as 'Artist - Title' or 'Artist - Title | Album'.",
+        "data": {
+          "system_prompt": "System Prompt"
         }
       }
     },
