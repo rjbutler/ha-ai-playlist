@@ -1,12 +1,13 @@
 {
   "domain": "ai_playlist",
   "name": "AI Playlist",
-  "codeowners": [],
+  "codeowners": ["@rjbutler"],
   "config_flow": true,
   "dependencies": ["ai_task", "music_assistant"],
-  "documentation": "https://github.com/your-repo/ai-playlist",
+  "documentation": "https://gitea.northridgetech.com/rjbutler/ha-ai-playlist",
   "iot_class": "local_push",
+  "issue_tracker": "https://gitea.northridgetech.com/rjbutler/ha-ai-playlist/issues",
   "loggers": ["custom_components.ai_playlist"],
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.5.0b0"
 }
