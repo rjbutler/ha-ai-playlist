@@ -64,6 +64,17 @@ def strip_album(track: str) -> tuple[str, str]:
     return (track.strip(), "")
 
 
+def track_dict_to_string(track: dict) -> str:
+    """Convert a track dict to 'Artist - Title | Album' string format."""
+    artist = track.get("artist", "").strip()
+    title = track.get("title", "").strip()
+    album = track.get("album", "").strip()
+    base = f"{artist} - {title}"
+    if album:
+        return f"{base} | {album}"
+    return base
+
+
 def split_track(track: str) -> tuple[str, str]:
     """Split a track string into (artist, title). Strips album first."""
     if not track:

@@ -7,6 +7,7 @@ from custom_components.ai_playlist.track_processing import (
     parse_ai_response,
     split_track,
     strip_album,
+    track_dict_to_string,
 )
 
 
@@ -149,6 +150,27 @@ class TestSplitTrack:
         # This is a known edge case — documenting actual behavior
         assert artist == "Jay"
         assert title == "Z - 99 Problems"
+
+
+# ── track_dict_to_string ─────────────────────────────────────────
+
+
+class TestTrackDictToString:
+    def test_with_album(self):
+        result = track_dict_to_string({"artist": "Pink Floyd", "title": "Comfortably Numb", "album": "The Wall"})
+        assert result == "Pink Floyd - Comfortably Numb | The Wall"
+
+    def test_without_album(self):
+        result = track_dict_to_string({"artist": "Radiohead", "title": "Creep"})
+        assert result == "Radiohead - Creep"
+
+    def test_empty_album(self):
+        result = track_dict_to_string({"artist": "Radiohead", "title": "Creep", "album": ""})
+        assert result == "Radiohead - Creep"
+
+    def test_whitespace_stripped(self):
+        result = track_dict_to_string({"artist": " Jay-Z ", "title": " 99 Problems ", "album": " The Black Album "})
+        assert result == "Jay-Z - 99 Problems | The Black Album"
 
 
 # ── parse_ai_response ────────────────────────────────────────────
