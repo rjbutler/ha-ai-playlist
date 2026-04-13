@@ -23,6 +23,7 @@ STORAGE_VERSION: Final = 1
 
 # Config flow keys
 CONF_AI_ENTITY: Final = "ai_entity"
+CONF_SYSTEM_PROMPT: Final = "system_prompt"
 
 # Playlist config keys
 CONF_PLAYLIST_NAME: Final = "name"
