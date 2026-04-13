@@ -98,9 +98,9 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                 user_input[CONF_PLAYLIST_NAME],
                 {
                     "prompt": user_input[CONF_PLAYLIST_PROMPT],
-                    "track_count": user_input.get(CONF_PLAYLIST_TRACK_COUNT, DEFAULT_TRACK_COUNT),
-                    "history_depth": user_input.get(CONF_PLAYLIST_HISTORY_DEPTH, DEFAULT_HISTORY_DEPTH),
-                    "refill_threshold": user_input.get(CONF_PLAYLIST_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD),
+                    "track_count": int(user_input.get(CONF_PLAYLIST_TRACK_COUNT, DEFAULT_TRACK_COUNT)),
+                    "history_depth": int(user_input.get(CONF_PLAYLIST_HISTORY_DEPTH, DEFAULT_HISTORY_DEPTH)),
+                    "refill_threshold": int(user_input.get(CONF_PLAYLIST_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD)),
                     "exclude_live": user_input.get(CONF_PLAYLIST_EXCLUDE_LIVE, False),
                 },
             )
@@ -170,9 +170,9 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                 user_input.get(CONF_PLAYLIST_NAME, current.get("name", "")),
                 {
                     "prompt": user_input[CONF_PLAYLIST_PROMPT],
-                    "track_count": user_input.get(CONF_PLAYLIST_TRACK_COUNT, DEFAULT_TRACK_COUNT),
-                    "history_depth": user_input.get(CONF_PLAYLIST_HISTORY_DEPTH, DEFAULT_HISTORY_DEPTH),
-                    "refill_threshold": user_input.get(CONF_PLAYLIST_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD),
+                    "track_count": int(user_input.get(CONF_PLAYLIST_TRACK_COUNT, DEFAULT_TRACK_COUNT)),
+                    "history_depth": int(user_input.get(CONF_PLAYLIST_HISTORY_DEPTH, DEFAULT_HISTORY_DEPTH)),
+                    "refill_threshold": int(user_input.get(CONF_PLAYLIST_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD)),
                     "exclude_live": user_input.get(CONF_PLAYLIST_EXCLUDE_LIVE, False),
                 },
             )
@@ -314,6 +314,8 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
     async def async_step_edit_collection_form(self, user_input=None):
         """Edit a selected collection."""
         collections = list(self.config_entry.options.get(CONF_COLLECTIONS, []))
+        if self._editing_collection_idx is None or self._editing_collection_idx >= len(collections):
+            return self.async_abort(reason="no_collections")
         current = collections[self._editing_collection_idx]
 
         if user_input is not None:
@@ -349,6 +351,8 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             idx = int(user_input["collection_index"])
+            if idx >= len(collections):
+                return self.async_abort(reason="no_collections")
             collections.pop(idx)
 
             new_options = dict(self.config_entry.options)
