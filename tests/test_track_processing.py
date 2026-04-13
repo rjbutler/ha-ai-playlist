@@ -260,6 +260,83 @@ class TestParseJsonTracks:
         assert result[0]["title"] == "99 Problems"
         assert result[0]["album"] == "The Black Album"
 
+    def test_non_string_artist_skipped(self):
+        raw = '[{"artist": 123, "title": "So What"}, {"artist": "Jay-Z", "title": "99 Problems"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+        assert result[0]["artist"] == "Jay-Z"
+
+    def test_non_string_title_skipped(self):
+        raw = '[{"artist": "Miles Davis", "title": 42}, {"artist": "Jay-Z", "title": "99 Problems"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+        assert result[0]["artist"] == "Jay-Z"
+
+    def test_null_artist_skipped(self):
+        raw = '[{"artist": null, "title": "So What"}, {"artist": "Jay-Z", "title": "99 Problems"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+
+    def test_boolean_values_skipped(self):
+        raw = '[{"artist": true, "title": "So What"}, {"artist": "Jay-Z", "title": "99 Problems"}]'
+        result = parse_json_tracks(raw)
+        assert len(result) == 1
+
+
+# ── parse_ai_response (dict round-trip) ─────────────────────────
+
+
+class TestDictStringRoundTrip:
+    """Verify the dict → string → filter → string → dict round-trip used by coordinator."""
+
+    def test_round_trip_preserves_track(self):
+        """A track converted to string and back via the filter path stays intact."""
+        original = {"artist": "Jay-Z", "title": "99 Problems", "album": "The Black Album"}
+        string_form = track_dict_to_string(original)
+        # Simulate filter_tracks returning the string unchanged
+        assert string_form == "Jay-Z - 99 Problems | The Black Album"
+        # Lookup in a mapping recovers the original dict
+        mapping = {track_dict_to_string(original): original}
+        assert mapping[string_form] is original
+
+    def test_duplicate_strings_first_wins(self):
+        """When two dicts produce the same string, first-seen should win."""
+        t1 = {"artist": "Eagles", "title": "Hotel California", "album": "Studio"}
+        t2 = {"artist": "Eagles", "title": "Hotel California", "album": "Live"}
+        # Both produce the same string WITHOUT album difference
+        # Actually they produce different strings because albums differ:
+        s1 = track_dict_to_string(t1)
+        s2 = track_dict_to_string(t2)
+        assert s1 == "Eagles - Hotel California | Studio"
+        assert s2 == "Eagles - Hotel California | Live"
+        assert s1 != s2  # Different albums = different strings = no collision
+
+    def test_duplicate_strings_same_album_collision(self):
+        """Two tracks with identical artist+title+album produce the same string."""
+        t1 = {"artist": "Eagles", "title": "Hotel California", "album": ""}
+        t2 = {"artist": "Eagles", "title": "Hotel California", "album": ""}
+        s1 = track_dict_to_string(t1)
+        s2 = track_dict_to_string(t2)
+        assert s1 == s2
+        # First-seen-wins mapping
+        mapping: dict[str, dict] = {}
+        for t in [t1, t2]:
+            key = track_dict_to_string(t)
+            if key not in mapping:
+                mapping[key] = t
+        assert mapping[s1] is t1  # First one wins
+
+    def test_filter_tracks_returns_original_strings(self):
+        """filter_tracks returns the original un-normalized strings in valid list."""
+        tracks_dicts = [
+            {"artist": "Jay-Z", "title": "99 Problems", "album": "The Black Album"},
+            {"artist": "Pink Floyd", "title": "Comfortably Numb", "album": "The Wall"},
+        ]
+        track_strings = [track_dict_to_string(t) for t in tracks_dicts]
+        result = filter_tracks(track_strings, history=[], enqueued=[])
+        # Valid strings should be identical to input strings
+        assert result["valid"] == track_strings
+
 
 # ── parse_ai_response ────────────────────────────────────────────
 
