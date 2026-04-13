@@ -27,6 +27,7 @@ from .track_processing import (
     filter_tracks,
     parse_ai_response,
     split_track,
+    strip_album,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ class PlaylistCoordinator:
         self._unsub_state_listener: CALLBACK_TYPE | None = None
         self._unsub_queue_listener: CALLBACK_TYPE | None = None
         self._generating: bool = False
+        self._last_queue_check: float = 0.0
         self._initial_enqueue_count: int = 0
         self._queue_id: str | None = None
 
@@ -278,8 +280,7 @@ class PlaylistCoordinator:
 
         for i, track in enumerate(tracks):
             artist, title = split_track(track)
-            _, album = (track.split("|", 1) if "|" in track else (track, ""))
-            album = album.strip() if isinstance(album, str) else ""
+            _, album = strip_album(track)
 
             if clear_first and i == 0:
                 enqueue = "replace"
@@ -345,14 +346,18 @@ class PlaylistCoordinator:
             if current_index is None:
                 current_index = -1
         else:
-            # Fallback: parse from string representation
-            import re
-
-            data_str = str(queue_data)
-            items_match = re.search(r"['\"]items['\"]\s*:\s*(\d+)", data_str)
-            index_match = re.search(r"['\"]current_index['\"]\s*:\s*(-?\d+)", data_str)
-            items = int(items_match.group(1)) if items_match else 0
-            current_index = int(index_match.group(1)) if index_match else -1
+            # Fallback: try attribute access on queue object
+            items = getattr(queue_data, "items", 0)
+            current_index = getattr(queue_data, "current_index", -1)
+            if items is None:
+                items = 0
+            if current_index is None:
+                current_index = -1
+            if not isinstance(items, int) or not isinstance(current_index, int):
+                _LOGGER.warning(
+                    "Unexpected queue data type for %s: %s", self.entity_id, type(queue_data)
+                )
+                return (0, -1)
 
         return (items, current_index)
 
@@ -385,14 +390,22 @@ class PlaylistCoordinator:
                 self.store.add_to_history, self.playlist_name, track_str
             )
 
-        # Check if refill needed — but not if we haven't consumed any initial tracks yet
+        # Debounce queue depth checks — at most once per 5 seconds
+        import time
+        now = time.monotonic()
+        if now - self._last_queue_check < 5.0:
+            return
+        self._last_queue_check = now
+
+        # Check if refill needed
+        if self._generating:
+            return
         queue_items, current_index = await self._check_queue_depth()
         if player_state == "playing" and queue_items > 0 and current_index >= 0:
             items_after = queue_items - current_index - 1
             if items_after < self.refill_threshold and current_index > 0:
                 if self._generating:
                     return
-                # Claim the flag before any await to prevent double-refill race
                 self._generating = True
                 try:
                     await self._refill()
