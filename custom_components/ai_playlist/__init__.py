@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinators = hass.data[DOMAIN]["coordinators"]
         for entity_id, session in active_sessions.items():
             playlist_name = session.get("playlist_name", "")
-            list_name = session.get("list_name")
+            collection_name = session.get("collection_name")
 
             config = store.get_playlist(playlist_name)
             if not config:
@@ -89,7 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             sensor = get_or_create_sensor(hass, entity_id)
             if sensor:
-                sensor.update_playback(playlist_name, list_name)
+                sensor.update_playback(playlist_name, collection_name)
 
     from homeassistant.core import callback as ha_callback
 
@@ -123,7 +123,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         prompt = call.data.get("prompt")
         track_count = call.data.get("track_count")
         clear_queue = call.data.get("clear_queue", True)
-        list_name = call.data.get("list")
+        collection_name = call.data.get("collection")
 
         # Coerce track_count from float (NumberSelector) to int
         if track_count is not None:
@@ -141,8 +141,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             sensor = get_sensor(hass, entity_id)
             if sensor:
                 playlist_name = (sensor.extra_state_attributes or {}).get("selected")
-                if not list_name:
-                    list_name = (sensor.extra_state_attributes or {}).get("selected_list")
+                if not collection_name:
+                    collection_name = (sensor.extra_state_attributes or {}).get("selected_collection")
             if not playlist_name:
                 raise HomeAssistantError(
                     "No playlist or prompt specified, and no playlist is currently selected"
@@ -189,7 +189,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 )
                 sensor = get_or_create_sensor(hass, entity_id)
                 if sensor:
-                    sensor.update_playback(existing.playlist_name, list_name)
+                    sensor.update_playback(existing.playlist_name, collection_name)
                 return
 
         # Different playlist or not attached — tear down and start fresh
@@ -210,12 +210,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             track_count=track_count,
         )
 
-        await store.set_active_session(entity_id, config.get("name", ""), list_name)
+        await store.set_active_session(entity_id, config.get("name", ""), collection_name)
 
         # Update playback state sensor
         sensor = get_or_create_sensor(hass, entity_id)
         if sensor:
-            sensor.update_playback(config.get("name", ""), list_name)
+            sensor.update_playback(config.get("name", ""), collection_name)
 
     async def async_handle_stop(call: ServiceCall) -> None:
         entity_id = call.data.get("entity_id")
@@ -275,7 +275,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise HomeAssistantError("entity_id is required")
 
         playlist_name = call.data.get("playlist", "")
-        list_name = call.data.get("list")
+        collection_name = call.data.get("collection")
 
         if not playlist_name:
             raise HomeAssistantError("'playlist' is required")
@@ -287,12 +287,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             return
 
-        sensor.update_selection(playlist_name, list_name)
+        sensor.update_selection(playlist_name, collection_name)
         _LOGGER.debug(
-            "Updated selection for %s: playlist=%s, list=%s",
+            "Updated selection for %s: playlist=%s, collection=%s",
             entity_id,
             playlist_name,
-            list_name,
+            collection_name,
         )
 
     if not hass.services.has_service(DOMAIN, SERVICE_PLAY):

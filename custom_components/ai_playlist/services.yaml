@@ -36,9 +36,9 @@ play:
       default: true
       selector:
         boolean:
-    list:
-      name: List
-      description: Name of the list this playlist was selected from (for state tracking)
+    collection:
+      name: Collection
+      description: Name of the collection this playlist was selected from (for state tracking)
       required: false
       selector:
         text:
@@ -99,9 +99,9 @@ select:
       required: true
       selector:
         text:
-    list:
-      name: List
-      description: Name of the list/category this playlist belongs to.
+    collection:
+      name: Collection
+      description: Name of the collection this playlist belongs to.
       required: false
       selector:
         text:
