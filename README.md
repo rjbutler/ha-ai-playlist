@@ -61,7 +61,7 @@ A collection is a named group of playlists filtered by tags, exposed as a Home A
 
 ### System Prompt
 
-The instructions sent to the AI for track generation. The default prompt enforces output format (`Artist - Title | Album`), uniqueness rules, and diversity constraints. Customize it from the options flow — but keep the output format requirement, as the integration's parser depends on it.
+The instructions sent to the AI for track generation. The default prompt requests JSON output (`[{"artist": "...", "title": "...", "album": "..."}]`), plus uniqueness and diversity rules. Customize it from the options flow. If a custom prompt produces plain text instead of JSON, the parser will fall back to line-based `Artist - Title | Album` parsing automatically.
 
 ## Services
 
