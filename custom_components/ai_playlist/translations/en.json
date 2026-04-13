@@ -22,9 +22,9 @@
           "edit_playlist": "Edit playlist",
           "delete_playlist": "Delete playlist",
           "import_playlists": "Import playlists from YAML",
-          "add_list": "Add list",
-          "edit_list": "Edit list",
-          "delete_list": "Delete list",
+          "add_collection": "Add collection",
+          "edit_collection": "Edit collection",
+          "delete_collection": "Delete collection",
           "edit_system_prompt": "Edit system prompt"
         }
       },
@@ -69,31 +69,31 @@
           "yaml_data": "YAML data"
         }
       },
-      "add_list": {
-        "title": "Add List",
+      "add_collection": {
+        "title": "Add Collection",
         "description": "Create a select entity backed by a tag query. Tags: {tag_hint}",
         "data": {
-          "name": "List Name",
+          "name": "Collection Name",
           "tags": "Tags (comma-separated)"
         }
       },
-      "edit_list": {
-        "title": "Edit List",
+      "edit_collection": {
+        "title": "Edit Collection",
         "data": {
-          "list_index": "Select list to edit"
+          "collection_index": "Select collection to edit"
         }
       },
-      "edit_list_form": {
-        "title": "Edit List",
+      "edit_collection_form": {
+        "title": "Edit Collection",
         "data": {
-          "name": "List Name",
+          "name": "Collection Name",
           "tags": "Tags (comma-separated)"
         }
       },
-      "delete_list": {
-        "title": "Delete List",
+      "delete_collection": {
+        "title": "Delete Collection",
         "data": {
-          "list_index": "Select list to delete"
+          "collection_index": "Select collection to delete"
         }
       },
       "edit_system_prompt": {
@@ -106,7 +106,7 @@
     },
     "abort": {
       "no_playlists": "No playlists configured yet. Add a playlist first.",
-      "no_lists": "No lists configured"
+      "no_collections": "No collections configured"
     }
   }
 }
