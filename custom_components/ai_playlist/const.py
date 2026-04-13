@@ -36,10 +36,10 @@ CONF_PLAYLIST_EXCLUDE_LIVE: Final = "exclude_live"
 # Platforms
 PLATFORMS: Final = ["select", "sensor"]
 
-# Config keys for lists
-CONF_LISTS: Final = "lists"
-CONF_LIST_NAME: Final = "name"
-CONF_LIST_TAGS: Final = "tags"
+# Config keys for collections
+CONF_COLLECTIONS: Final = "collections"
+CONF_COLLECTION_NAME: Final = "name"
+CONF_COLLECTION_TAGS: Final = "tags"
 
 SYSTEM_PROMPT: Final = """You are a music playlist curator. Generate a list of tracks based on the user's request.
 
