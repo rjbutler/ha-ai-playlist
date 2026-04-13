@@ -265,70 +265,68 @@ class TestParseJsonTracks:
 
 
 class TestParseAiResponse:
-    def test_basic_lines(self):
+    """parse_ai_response now returns list[dict], trying JSON first then line fallback."""
+
+    def test_json_input_returns_dicts(self):
+        raw = '[{"artist": "Led Zeppelin", "title": "Stairway to Heaven", "album": "Led Zeppelin IV"}]'
+        result = parse_ai_response(raw)
+        assert len(result) == 1
+        assert result[0] == {"artist": "Led Zeppelin", "title": "Stairway to Heaven", "album": "Led Zeppelin IV"}
+
+    def test_json_code_fenced(self):
+        raw = '```json\n[{"artist": "Miles Davis", "title": "So What"}]\n```'
+        result = parse_ai_response(raw)
+        assert len(result) == 1
+        assert result[0]["artist"] == "Miles Davis"
+
+    def test_plain_text_fallback_returns_dicts(self):
         raw = "Led Zeppelin - Stairway to Heaven\nPink Floyd - Comfortably Numb"
         result = parse_ai_response(raw)
         assert len(result) == 2
-        assert result[0] == "Led Zeppelin - Stairway to Heaven"
-        assert result[1] == "Pink Floyd - Comfortably Numb"
+        assert result[0]["artist"] == "Led Zeppelin"
+        assert result[0]["title"] == "Stairway to Heaven"
+        assert result[0]["album"] == ""
 
-    def test_strips_numbering_dot(self):
+    def test_plain_text_with_album_fallback(self):
+        raw = "Pink Floyd - Comfortably Numb | The Wall"
+        result = parse_ai_response(raw)
+        assert len(result) == 1
+        assert result[0]["artist"] == "Pink Floyd"
+        assert result[0]["title"] == "Comfortably Numb"
+        assert result[0]["album"] == "The Wall"
+
+    def test_plain_text_strips_numbering(self):
         raw = "1. Led Zeppelin - Stairway to Heaven\n2. Pink Floyd - Comfortably Numb"
         result = parse_ai_response(raw)
-        assert result[0] == "Led Zeppelin - Stairway to Heaven"
+        assert len(result) == 2
+        assert result[0]["artist"] == "Led Zeppelin"
 
-    def test_strips_numbering_paren(self):
-        raw = "1) Led Zeppelin - Stairway to Heaven"
-        result = parse_ai_response(raw)
-        assert result[0] == "Led Zeppelin - Stairway to Heaven"
-
-    def test_strips_numbering_colon(self):
-        raw = "1: Led Zeppelin - Stairway to Heaven"
-        result = parse_ai_response(raw)
-        assert result[0] == "Led Zeppelin - Stairway to Heaven"
-
-    def test_strips_bullet_dash(self):
-        raw = "- Led Zeppelin - Stairway to Heaven"
-        result = parse_ai_response(raw)
-        assert result[0] == "Led Zeppelin - Stairway to Heaven"
-
-    def test_rejects_cot_lines(self):
-        raw = "STEP 1: Think about rock music\nLed Zeppelin - Stairway to Heaven\nNOTE: Added a classic"
+    def test_plain_text_rejects_cot(self):
+        raw = "STEP 1: Think about rock\nLed Zeppelin - Stairway to Heaven\nNOTE: classic"
         result = parse_ai_response(raw)
         assert len(result) == 1
-        assert result[0] == "Led Zeppelin - Stairway to Heaven"
 
-    def test_rejects_lines_without_separator(self):
-        raw = "Here are some great tracks:\nLed Zeppelin - Stairway to Heaven\nEnjoy!"
+    def test_malformed_json_falls_back_to_lines(self):
+        raw = '[{"artist": "Miles Davis"  BROKEN\nLed Zeppelin - Stairway to Heaven'
         result = parse_ai_response(raw)
         assert len(result) == 1
+        assert result[0]["artist"] == "Led Zeppelin"
 
     def test_empty_input(self):
         assert parse_ai_response("") == []
         assert parse_ai_response(None) == []
 
-    def test_blank_lines_ignored(self):
-        raw = "Led Zeppelin - Stairway to Heaven\n\n\nPink Floyd - Comfortably Numb\n"
+    def test_no_valid_tracks_returns_empty(self):
+        raw = "Here are some tracks:\nEnjoy the music!"
         result = parse_ai_response(raw)
-        assert len(result) == 2
+        assert result == []
 
-    def test_with_album(self):
-        raw = "Led Zeppelin - Stairway to Heaven | Led Zeppelin IV"
+    def test_jay_z_json_works(self):
+        """JSON path correctly handles hyphenated artist names."""
+        raw = '[{"artist": "Jay-Z", "title": "99 Problems", "album": "The Black Album"}]'
         result = parse_ai_response(raw)
-        assert result[0] == "Led Zeppelin - Stairway to Heaven | Led Zeppelin IV"
-
-    def test_various_cot_prefixes(self):
-        cot_lines = [
-            "THINKING about the request",
-            "ANALYSIS of the genre",
-            "REASONING through options",
-            "FINAL list below",
-            "ANSWER:",
-            "PASS 1: initial selection",
-        ]
-        for line in cot_lines:
-            result = parse_ai_response(line)
-            assert result == [], f"Should reject CoT line: {line}"
+        assert result[0]["artist"] == "Jay-Z"
+        assert result[0]["title"] == "99 Problems"
 
 
 # ── filter_tracks ────────────────────────────────────────────────

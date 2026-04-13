@@ -4,7 +4,10 @@ Pure functions for normalizing, parsing, and filtering tracks.
 No Home Assistant dependencies — fully testable standalone.
 """
 import json
+import logging as _logging
 import re
+
+_logger = _logging.getLogger(__name__)
 
 
 def normalize_track(track: str | None) -> str:
@@ -154,35 +157,54 @@ _TRACK_LINE_PATTERN = re.compile(r"[A-Za-z].+\s-\s.+")
 _NUMBERING_PATTERN = re.compile(r"^\s*(?:\d+[\.\)\:]|\-)\s*")
 
 
-def parse_ai_response(raw_text: str | None) -> list[str]:
-    """Parse raw AI response text into a list of track strings.
-
-    Splits on newlines, strips numbering/bullets, rejects chain-of-thought
-    lines, and keeps only lines matching the "Artist - Title" pattern.
-    """
-    if not raw_text:
-        return []
-
+def _parse_lines(raw_text: str) -> list[str]:
+    """Parse plain-text AI response into track strings (fallback path)."""
     tracks = []
     for line in raw_text.split("\n"):
         line = line.strip()
         if not line:
             continue
-
-        # Reject chain-of-thought lines
         if _COT_PATTERN.match(line):
             continue
-
-        # Strip leading numbering
         line = _NUMBERING_PATTERN.sub("", line).strip()
         if not line:
             continue
-
-        # Must look like "Artist - Title"
         if _TRACK_LINE_PATTERN.match(line):
             tracks.append(line)
-
     return tracks
+
+
+def parse_ai_response(raw_text: str | None) -> list[dict]:
+    """Parse raw AI response into a list of track dicts.
+
+    Tries JSON parsing first. On failure, falls back to line-based
+    parsing and converts results to dicts via split_track/strip_album.
+
+    Returns list of {"artist": str, "title": str, "album": str} dicts.
+    """
+    if not raw_text:
+        return []
+
+    # Primary path: JSON
+    try:
+        return parse_json_tracks(raw_text)
+    except ValueError:
+        pass
+
+    # Fallback: line-based parsing
+    _logger.warning("JSON parse failed, falling back to line parser")
+    tracks = _parse_lines(raw_text)
+    if not tracks:
+        return []
+
+    # Convert line-parsed strings to dicts
+    result = []
+    for track_str in tracks:
+        artist, title = split_track(track_str)
+        _, album = strip_album(track_str)
+        if artist and title:
+            result.append({"artist": artist, "title": title, "album": album})
+    return result
 
 
 # Regex for live recording detection
