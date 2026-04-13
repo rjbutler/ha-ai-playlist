@@ -1,6 +1,8 @@
 """Constants for the AI Playlist integration."""
 from typing import Final
 
+from homeassistant.const import Platform
+
 DOMAIN: Final = "ai_playlist"
 
 # Defaults
@@ -34,7 +36,7 @@ CONF_PLAYLIST_REFILL_THRESHOLD: Final = "refill_threshold"
 CONF_PLAYLIST_EXCLUDE_LIVE: Final = "exclude_live"
 
 # Platforms
-PLATFORMS: Final = ["select", "sensor"]
+PLATFORMS: Final = [Platform.SELECT, Platform.SENSOR]
 
 # Config keys for collections
 CONF_COLLECTIONS: Final = "collections"

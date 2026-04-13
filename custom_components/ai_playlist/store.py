@@ -261,4 +261,5 @@ class PlaylistStore:
         slug = name.lower()
         slug = re.sub(r"[^\w\s-]", "", slug)
         slug = re.sub(r"\s+", "_", slug)
-        return slug.strip("_")
+        slug = slug.strip("_")
+        return slug if slug else "_unnamed"
