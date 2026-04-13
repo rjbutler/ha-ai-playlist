@@ -1,0 +1,104 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "AI Playlist Setup",
+        "description": "Select the AI Task entity to use for generating playlists.",
+        "data": {
+          "ai_entity": "AI Task Entity"
+        }
+      }
+    },
+    "error": {
+      "no_ai_entity": "Please select an AI Task entity."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AI Playlist Configuration",
+        "menu_options": {
+          "add_playlist": "Add playlist",
+          "edit_playlist": "Edit playlist",
+          "delete_playlist": "Delete playlist",
+          "import_playlists": "Import playlists from YAML",
+          "add_list": "Add list",
+          "edit_list": "Edit list",
+          "delete_list": "Delete list"
+        }
+      },
+      "add_playlist": {
+        "title": "Add Playlist",
+        "data": {
+          "name": "Playlist name",
+          "prompt": "AI prompt",
+          "track_count": "Tracks per generation",
+          "history_depth": "History depth (tracks remembered)",
+          "refill_threshold": "Refill when fewer than N tracks remain",
+          "exclude_live": "Exclude live recordings"
+        }
+      },
+      "edit_playlist": {
+        "title": "Select Playlist to Edit",
+        "data": {
+          "playlist": "Playlist"
+        }
+      },
+      "edit_playlist_form": {
+        "title": "Edit Playlist",
+        "data": {
+          "name": "Playlist name",
+          "prompt": "AI prompt",
+          "track_count": "Tracks per generation",
+          "history_depth": "History depth (tracks remembered)",
+          "refill_threshold": "Refill when fewer than N tracks remain",
+          "exclude_live": "Exclude live recordings"
+        }
+      },
+      "delete_playlist": {
+        "title": "Delete Playlist",
+        "data": {
+          "playlist": "Playlist to delete"
+        }
+      },
+      "import_playlists": {
+        "title": "Import Playlists",
+        "description": "Paste YAML with playlist definitions. Each entry needs 'name' and 'prompt'. Optional: track_count, history_depth, refill_threshold, exclude_live.",
+        "data": {
+          "yaml_data": "YAML data"
+        }
+      },
+      "add_list": {
+        "title": "Add List",
+        "description": "Create a select entity backed by a tag query. Tags: {tag_hint}",
+        "data": {
+          "name": "List Name",
+          "tags": "Tags (comma-separated)"
+        }
+      },
+      "edit_list": {
+        "title": "Edit List",
+        "data": {
+          "list_index": "Select list to edit"
+        }
+      },
+      "edit_list_form": {
+        "title": "Edit List",
+        "data": {
+          "name": "List Name",
+          "tags": "Tags (comma-separated)"
+        }
+      },
+      "delete_list": {
+        "title": "Delete List",
+        "data": {
+          "list_index": "Select list to delete"
+        }
+      }
+    },
+    "abort": {
+      "no_playlists": "No playlists configured yet. Add a playlist first.",
+      "no_lists": "No lists configured"
+    }
+  }
+}
