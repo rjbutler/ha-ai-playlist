@@ -26,8 +26,7 @@ from .store import PlaylistStore
 from .track_processing import (
     filter_tracks,
     parse_ai_response,
-    split_track,
-    strip_album,
+    track_dict_to_string,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -245,15 +244,19 @@ class PlaylistCoordinator:
             self.state = STATE_ERROR
             return
 
+        # Convert dicts to strings for dedup, keep mapping to recover dicts
+        track_strings = [track_dict_to_string(t) for t in parsed]
+        string_to_dict = {track_dict_to_string(t): t for t in parsed}
+
         filtered = filter_tracks(
-            parsed,
+            track_strings,
             history=history,
             enqueued=self.enqueued_tracks,
             exclude_live=self.exclude_live,
         )
 
-        valid = filtered["valid"]
-        if not valid:
+        valid_strings = filtered["valid"]
+        if not valid_strings:
             _LOGGER.warning(
                 "All %d tracks filtered as duplicates for '%s'",
                 len(parsed),
@@ -264,14 +267,16 @@ class PlaylistCoordinator:
 
         _LOGGER.info(
             "Generated %d valid tracks for '%s' (%d filtered)",
-            len(valid),
+            len(valid_strings),
             self.playlist_name,
             len(filtered["duplicates"]),
         )
 
-        await self._enqueue_tracks(valid, clear_first=clear_first)
+        # Map valid strings back to dicts for enqueue
+        valid_dicts = [string_to_dict[s] for s in valid_strings]
+        await self._enqueue_tracks(valid_dicts, clear_first=clear_first)
 
-    async def _enqueue_tracks(self, tracks: list[str], clear_first: bool) -> None:
+    async def _enqueue_tracks(self, tracks: list[dict], clear_first: bool) -> None:
         """Enqueue tracks to Music Assistant."""
         self.state = STATE_ENQUEUING
 
@@ -279,8 +284,9 @@ class PlaylistCoordinator:
         is_playing = player_state and player_state.state == "playing"
 
         for i, track in enumerate(tracks):
-            artist, title = split_track(track)
-            _, album = strip_album(track)
+            artist = track["artist"]
+            title = track["title"]
+            album = track.get("album", "")
 
             if clear_first and i == 0:
                 enqueue = "replace"
@@ -301,9 +307,9 @@ class PlaylistCoordinator:
                     target={"entity_id": self.entity_id},
                     blocking=True,
                 )
-                self.enqueued_tracks.append(track)
+                self.enqueued_tracks.append(track_dict_to_string(track))
             except Exception:
-                _LOGGER.warning("Failed to enqueue track: %s", track)
+                _LOGGER.warning("Failed to enqueue track: %s - %s", artist, title)
 
     def _build_user_prompt(
         self, history: list[str], enqueued: list[str]
