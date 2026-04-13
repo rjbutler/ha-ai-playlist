@@ -12,3 +12,6 @@ build/
 
 # Claude Code
 .claude/settings.json
+
+# Worktrees
+.worktrees/
