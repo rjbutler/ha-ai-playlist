@@ -1,4 +1,5 @@
 """The AI Playlist integration."""
+import hashlib
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -111,6 +112,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not entity_id:
             raise HomeAssistantError("entity_id is required")
 
+        store = hass.data[DOMAIN]["store"]
+        entry = hass.data[DOMAIN]["entry"]
+
         _LOGGER.info(
             "ai_playlist.play called: entity_id=%s, playlist=%s, prompt=%s, data=%s, target=%s",
             entity_id,
@@ -156,7 +160,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             # Ad-hoc prompt — create temporary config
             config = {
-                "name": f"adhoc_{hash(prompt) % 10000}",
+                "name": f"adhoc_{hashlib.md5(prompt.encode()).hexdigest()[:8]}",
                 "prompt": prompt,
                 "track_count": track_count or DEFAULT_TRACK_COUNT,
                 "history_depth": DEFAULT_HISTORY_DEPTH,
@@ -238,10 +242,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def async_handle_clear_history(call: ServiceCall) -> None:
         playlist_name = call.data["playlist"]
+        store = hass.data[DOMAIN]["store"]
         await hass.async_add_executor_job(store.clear_history, playlist_name)
         _LOGGER.info("Cleared history for playlist '%s'", playlist_name)
 
     async def async_handle_list_playlists(call: ServiceCall) -> dict:
+        store = hass.data[DOMAIN]["store"]
         tag = call.data.get("tag")
         tags = call.data.get("tags", [])
         if tag and not tags:
