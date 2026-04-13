@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import (
+    CONF_AI_ENTITY,
+    CONF_SYSTEM_PROMPT,
     DEFAULT_REFILL_THRESHOLD,
     DEFAULT_TRACK_COUNT,
     DOMAIN,
@@ -39,13 +41,14 @@ class PlaylistCoordinator:
         store: PlaylistStore,
         playlist_config: dict,
         entity_id: str,
-        ai_entity_id: str,
+        entry: ConfigEntry,
     ) -> None:
         self.hass = hass
         self.store = store
         self.playlist_config = playlist_config
         self.entity_id = entity_id
-        self.ai_entity_id = ai_entity_id
+        self.entry = entry
+        self.ai_entity_id: str = entry.data.get(CONF_AI_ENTITY, "")
 
         self.state: str = STATE_IDLE
         self.enqueued_tracks: list[str] = []
@@ -67,6 +70,10 @@ class PlaylistCoordinator:
     @property
     def exclude_live(self) -> bool:
         return self.playlist_config.get("exclude_live", False)
+
+    @property
+    def system_prompt(self) -> str:
+        return self.entry.options.get(CONF_SYSTEM_PROMPT, SYSTEM_PROMPT)
 
     def _get_mass_client(self):
         """Get the Music Assistant client from the core integration."""
@@ -213,7 +220,7 @@ class PlaylistCoordinator:
                 "generate_data",
                 {
                     "task_name": "ai_playlist_generate",
-                    "instructions": f"{SYSTEM_PROMPT}\n\n{prompt}",
+                    "instructions": f"{self.system_prompt}\n\n{prompt}",
                     "entity_id": self.ai_entity_id,
                 },
                 blocking=True,
