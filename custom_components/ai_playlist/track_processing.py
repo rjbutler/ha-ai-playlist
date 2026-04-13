@@ -127,10 +127,10 @@ def parse_json_tracks(raw_text: str | None) -> list[dict]:
             continue
         artist = entry.get("artist", "")
         title = entry.get("title", "")
-        if isinstance(artist, str):
-            artist = artist.strip()
-        if isinstance(title, str):
-            title = title.strip()
+        if not isinstance(artist, str) or not isinstance(title, str):
+            continue
+        artist = artist.strip()
+        title = title.strip()
         if not artist or not title:
             continue
         album = entry.get("album", "")

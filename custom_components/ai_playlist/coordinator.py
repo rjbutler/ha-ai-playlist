@@ -26,6 +26,8 @@ from .store import PlaylistStore
 from .track_processing import (
     filter_tracks,
     parse_ai_response,
+    split_track,
+    strip_album,
     track_dict_to_string,
 )
 
@@ -110,7 +112,15 @@ class PlaylistCoordinator:
                 _LOGGER.info(
                     "Restoring %d cached tracks for '%s'", len(cached), self.playlist_name
                 )
-                await self._enqueue_tracks(cached, clear_first=clear_queue)
+                # Cache stores strings — convert to dicts for _enqueue_tracks
+                cached_dicts = []
+                for s in cached:
+                    artist, title = split_track(s)
+                    _, album = strip_album(s)
+                    if artist and title:
+                        cached_dicts.append({"artist": artist, "title": title, "album": album})
+                if cached_dicts:
+                    await self._enqueue_tracks(cached_dicts, clear_first=clear_queue)
             else:
                 await self._generate_and_enqueue(count, clear_first=clear_queue)
         finally:
@@ -246,7 +256,11 @@ class PlaylistCoordinator:
 
         # Convert dicts to strings for dedup, keep mapping to recover dicts
         track_strings = [track_dict_to_string(t) for t in parsed]
-        string_to_dict = {track_dict_to_string(t): t for t in parsed}
+        string_to_dict: dict[str, dict] = {}
+        for t in parsed:
+            key = track_dict_to_string(t)
+            if key not in string_to_dict:
+                string_to_dict[key] = t
 
         filtered = filter_tracks(
             track_strings,
