@@ -305,7 +305,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
 
             # Reload entry to create the new select entity
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            return self.async_create_entry(data=new_options)
+            return self.async_create_entry(title="", data=new_options)
 
         return self.async_show_form(
             step_id="add_collection",
@@ -360,7 +360,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                 self.config_entry, options=new_options
             )
             await self._refresh_select_entities()
-            return self.async_create_entry(data=new_options)
+            return self.async_create_entry(title="", data=new_options)
 
         return self.async_show_form(
             step_id="edit_collection_form",
@@ -391,7 +391,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
             )
             # Reload entry to remove the select entity
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            return self.async_create_entry(data=new_options)
+            return self.async_create_entry(title="", data=new_options)
 
         collection_names = {str(i): cfg[CONF_COLLECTION_NAME] for i, cfg in enumerate(collections)}
         return self.async_show_form(
@@ -413,7 +413,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
             self.hass.config_entries.async_update_entry(
                 self.config_entry, options=new_options
             )
-            return self.async_create_entry(data=new_options)
+            return self.async_create_entry(title="", data=new_options)
 
         current_prompt = self.config_entry.options.get(
             CONF_SYSTEM_PROMPT, SYSTEM_PROMPT
