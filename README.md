@@ -42,7 +42,23 @@ Named prompt + settings combinations. Each playlist has:
 | Refill threshold | 2 | Remaining tracks before auto-refill triggers |
 | Exclude live | off | Filter out live recordings |
 
-You can also **import playlists from YAML** — paste a YAML list with `name` and `prompt` fields.
+You can also **import playlists from YAML** — paste a YAML list into the import form. See [examples/](examples/) for ready-to-import files.
+
+#### Import YAML format
+
+```yaml
+- name: Classic Rock Foundations        # required — display name
+  prompt: >                             # required — instructions for the AI
+    Generate a playlist of classic rock songs from artists such as
+    The Beatles, Led Zeppelin, The Who. Include similar artists.
+  tags: [genre, rock]                   # optional — for collection filtering
+  track_count: 10                       # optional (default: 10)
+  history_depth: 50                     # optional (default: 50)
+  refill_threshold: 2                   # optional (default: 2)
+  exclude_live: true                    # optional (default: false)
+```
+
+Only `name` and `prompt` are required — everything else uses defaults if omitted. The format matches the internal storage structure, so you can export playlists from `.storage/ai_playlist.playlists` and convert them directly.
 
 ### Playlist Collections
 
@@ -77,6 +93,7 @@ Start an AI-generated playlist on a media player.
 | `track_count` | no | Override tracks per generation |
 | `clear_queue` | no | Clear existing queue first (default: true) |
 | `collection` | no | Collection name for state tracking |
+| `ai_entity` | no | Override the configured AI Task entity for this session. Applies to the initial generation and all refills. Not persisted across HA restarts. |
 
 If neither `playlist` nor `prompt` is provided, plays the currently selected playlist (set via `ai_playlist.select`).
 
@@ -114,6 +131,26 @@ Returns all configured playlists. Supports response data.
 |---|---|---|
 | `tag` | no | Filter by single tag |
 | `tags` | no | Filter by multiple tags (AND logic) |
+
+### `ai_playlist.generate`
+
+Run the AI generation pipeline and return the track list as service response data. Does not enqueue anything on a media player. Reads playlist history for dedup but does not write to it. One of `playlist` or `prompt` is required.
+
+| Field | Required | Description |
+|---|---|---|
+| `playlist` | no | Name of a configured playlist |
+| `prompt` | no | Ad-hoc prompt (used if no playlist specified) |
+| `track_count` | no | Override tracks per generation |
+| `ai_entity` | no | Override the configured AI Task entity for this call |
+
+Response:
+
+```yaml
+tracks:
+  - artist: "Miles Davis"
+    title: "So What"
+    album: "Kind of Blue"
+```
 
 ## Examples
 
@@ -186,7 +223,7 @@ sequence:
 ## How It Works
 
 1. **Generate** — Sends your prompt + exclusion list to the AI Task entity
-2. **Parse** — Extracts `Artist - Title | Album` lines from the response
+2. **Parse** — Extracts structured tracks from the AI response (JSON array preferred, with automatic fallback to `Artist - Title | Album` line parsing)
 3. **Filter** — Removes duplicates against history and current queue
 4. **Enqueue** — Sends tracks to Music Assistant via `play_media`
 5. **Monitor** — Watches queue depth and auto-refills when tracks are running low
