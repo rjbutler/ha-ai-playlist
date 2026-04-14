@@ -3,6 +3,7 @@
 Manages playlist configurations (via HA Store) and per-playlist
 track history + cache (via JSON files).
 """
+import asyncio
 import json
 import logging
 import os
@@ -35,6 +36,16 @@ class PlaylistStore:
         self._active_sessions: dict[str, dict] = {}  # entity_id -> {playlist_name, collection_name}
         self._known_players: list[str] = []
         self._history_dir = os.path.join(hass.config.path(".storage"), "ai_playlist", "history")
+        self._history_locks: dict[str, asyncio.Lock] = {}
+
+    def _history_lock(self, playlist_name: str) -> asyncio.Lock:
+        """Return (creating if needed) the asyncio.Lock for a playlist's history file."""
+        slug = self._playlist_slug(playlist_name)
+        lock = self._history_locks.get(slug)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._history_locks[slug] = lock
+        return lock
 
     async def async_load(self) -> None:
         """Load playlist configs and session state from HA storage."""
@@ -72,8 +83,19 @@ class PlaylistStore:
         return dict(self._playlists)
 
     async def async_save_playlist(self, name: str, config: dict) -> None:
-        """Save or update a playlist config."""
+        """Save or update a playlist config.
+
+        Raises ValueError if `name` slugifies to a slug already used by a
+        different playlist (e.g. "Rock & Roll" vs "Rock Roll" both → "rock_roll").
+        """
         slug = self._playlist_slug(name)
+        existing = self._playlists.get(slug)
+        if existing and existing.get("name") != name:
+            raise ValueError(
+                f"Playlist name '{name}' collides with existing playlist "
+                f"'{existing.get('name')}' (both produce slug '{slug}'). "
+                f"Pick a more distinct name."
+            )
         self._playlists[slug] = {
             "name": name,
             "prompt": config.get("prompt", ""),
@@ -126,7 +148,11 @@ class PlaylistStore:
         for item in items:
             if not isinstance(item, dict) or "name" not in item or "prompt" not in item:
                 continue
-            await self.async_save_playlist(item["name"], item)
+            try:
+                await self.async_save_playlist(item["name"], item)
+            except ValueError as err:
+                _LOGGER.warning("Skipping playlist import: %s", err)
+                continue
             count += 1
 
         return count
@@ -153,8 +179,10 @@ class PlaylistStore:
     def _save_history_data(self, playlist_name: str, data: dict) -> None:
         os.makedirs(self._history_dir, exist_ok=True)
         path = self._history_path(playlist_name)
-        with open(path, "w", encoding="utf-8") as f:
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, path)
 
     def get_history(self, playlist_name: str) -> list[str]:
         """Get track history for a playlist."""
@@ -250,6 +278,42 @@ class PlaylistStore:
     def get_cache_peek(self, playlist_name: str) -> list[str]:
         """Get cached tracks without clearing them (non-destructive)."""
         return self._load_history_data(playlist_name).get("unplayed_cache", [])
+
+    # --- Async wrappers (lock-protected, executor-dispatched) ---
+    #
+    # The history file holds both `tracks` and `unplayed_cache`. Without
+    # serialization, concurrent add_to_history / save_cache calls (e.g. a
+    # state-change event recording history while a coordinator detach saves
+    # the cache) can interleave and lose data. Production callers must use
+    # these async wrappers; the sync methods are retained for tests.
+
+    async def async_add_to_history(
+        self, playlist_name: str, track: str, max_tracks: int | None = None
+    ) -> None:
+        async with self._history_lock(playlist_name):
+            await self._hass.async_add_executor_job(
+                self.add_to_history, playlist_name, track, max_tracks
+            )
+
+    async def async_clear_history(self, playlist_name: str) -> None:
+        async with self._history_lock(playlist_name):
+            await self._hass.async_add_executor_job(
+                self.clear_history, playlist_name
+            )
+
+    async def async_save_cache(
+        self, playlist_name: str, tracks: list[str]
+    ) -> None:
+        async with self._history_lock(playlist_name):
+            await self._hass.async_add_executor_job(
+                self.save_cache, playlist_name, tracks
+            )
+
+    async def async_get_cache(self, playlist_name: str) -> list[str]:
+        async with self._history_lock(playlist_name):
+            return await self._hass.async_add_executor_job(
+                self.get_cache, playlist_name
+            )
 
     # --- Helpers ---
 

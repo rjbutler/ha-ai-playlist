@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
@@ -148,6 +149,7 @@ class PlaylistCoordinator:
         self._unsub_queue_listener: CALLBACK_TYPE | None = None
         self._generating: bool = False
         self._last_queue_check: float = 0.0
+        self._last_recorded_track: tuple[str, str] | None = None
         self._initial_enqueue_count: int = 0
         self._queue_id: str | None = None
 
@@ -194,9 +196,7 @@ class PlaylistCoordinator:
         self._generating = True
         try:
             # Check for cached tracks first
-            cached = await self.hass.async_add_executor_job(
-                self.store.get_cache, self.playlist_name
-            )
+            cached = await self.store.async_get_cache(self.playlist_name)
             if cached:
                 _LOGGER.info(
                     "Restoring %d cached tracks for '%s'", len(cached), self.playlist_name
@@ -443,28 +443,31 @@ class PlaylistCoordinator:
         attrs = new_state.attributes
         media_title = attrs.get("media_title")
 
-        # Record track to history
+        # Record track to history (skip if same track as last recorded —
+        # state events fire on every attribute change, including position)
         media_artist = attrs.get("media_artist", "")
         if media_title and media_artist and player_state == "playing":
-            track_str = f"{media_artist} - {media_title}"
-            await self.hass.async_add_executor_job(
-                self.store.add_to_history, self.playlist_name, track_str
-            )
+            track_key = (media_artist, media_title)
+            if track_key != self._last_recorded_track:
+                self._last_recorded_track = track_key
+                track_str = f"{media_artist} - {media_title}"
+                await self.store.async_add_to_history(self.playlist_name, track_str)
 
         # Debounce queue depth checks — at most once per 5 seconds
-        import time
         now = time.monotonic()
         if now - self._last_queue_check < 5.0:
             return
         self._last_queue_check = now
 
-        # Check if refill needed
-        if self._generating:
+        # Check if refill needed. Require enqueued_tracks to be non-empty —
+        # otherwise queue events arriving before the initial enqueue completes
+        # could trigger a spurious refill.
+        if self._generating or not self.enqueued_tracks:
             return
         queue_items, current_index = await self._check_queue_depth()
         if player_state == "playing" and queue_items > 0 and current_index >= 0:
             items_after = queue_items - current_index - 1
-            if items_after < self.refill_threshold and current_index > 0:
+            if items_after < self.refill_threshold:
                 if self._generating:
                     return
                 self._generating = True
@@ -564,8 +567,8 @@ class PlaylistCoordinator:
             self._unsub_queue_listener = None
 
         if self.enqueued_tracks:
-            await self.hass.async_add_executor_job(
-                self.store.save_cache, self.playlist_name, list(self.enqueued_tracks)
+            await self.store.async_save_cache(
+                self.playlist_name, list(self.enqueued_tracks)
             )
             _LOGGER.info(
                 "Cached %d enqueued tracks for '%s'",

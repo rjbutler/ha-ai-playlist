@@ -248,7 +248,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def async_handle_clear_history(call: ServiceCall) -> None:
         playlist_name = call.data["playlist"]
         store = hass.data[DOMAIN]["store"]
-        await hass.async_add_executor_job(store.clear_history, playlist_name)
+        await store.async_clear_history(playlist_name)
         _LOGGER.info("Cleared history for playlist '%s'", playlist_name)
 
     async def async_handle_list_playlists(call: ServiceCall) -> dict:
