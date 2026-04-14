@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
+    CONF_AI_ENTITY,
     DEFAULT_HISTORY_DEPTH,
     DEFAULT_REFILL_THRESHOLD,
     DEFAULT_TRACK_COUNT,
@@ -26,6 +27,7 @@ SERVICE_STOP = "stop"
 SERVICE_CLEAR_HISTORY = "clear_history"
 SERVICE_LIST_PLAYLISTS = "list_playlists"
 SERVICE_SELECT = "select"
+SERVICE_GENERATE = "generate"
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -304,6 +306,61 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             collection_name,
         )
 
+    async def async_handle_generate(call: ServiceCall) -> dict:
+        from .const import CONF_SYSTEM_PROMPT, SYSTEM_PROMPT
+        from .coordinator import generate_tracks
+
+        store = hass.data[DOMAIN]["store"]
+        entry = hass.data[DOMAIN]["entry"]
+
+        playlist_name = call.data.get("playlist")
+        prompt = call.data.get("prompt")
+        track_count = call.data.get("track_count")
+        ai_entity_override = call.data.get("ai_entity")
+
+        if track_count is not None:
+            track_count = int(track_count)
+
+        if not playlist_name and not prompt:
+            raise HomeAssistantError("'playlist' or 'prompt' is required")
+
+        if playlist_name:
+            config = store.get_playlist(playlist_name)
+            if not config:
+                raise HomeAssistantError(f"Playlist '{playlist_name}' not found")
+        else:
+            config = {
+                "name": f"adhoc_{hashlib.md5(prompt.encode()).hexdigest()[:8]}",
+                "prompt": prompt,
+                "track_count": track_count or DEFAULT_TRACK_COUNT,
+                "history_depth": DEFAULT_HISTORY_DEPTH,
+                "refill_threshold": DEFAULT_REFILL_THRESHOLD,
+                "exclude_live": False,
+            }
+
+        effective_count = track_count or config.get("track_count", DEFAULT_TRACK_COUNT)
+        ai_entity_id = ai_entity_override or entry.data.get(CONF_AI_ENTITY, "")
+        if not ai_entity_id:
+            raise HomeAssistantError("No AI Task entity configured or supplied")
+
+        system_prompt = entry.options.get(CONF_SYSTEM_PROMPT, SYSTEM_PROMPT)
+
+        history = await hass.async_add_executor_job(
+            store.get_history, config.get("name", "")
+        )
+
+        tracks = await generate_tracks(
+            hass=hass,
+            ai_entity_id=ai_entity_id,
+            system_prompt=system_prompt,
+            playlist_config=config,
+            history=history,
+            enqueued=[],
+            track_count=effective_count,
+        )
+
+        return {"tracks": tracks}
+
     if not hass.services.has_service(DOMAIN, SERVICE_PLAY):
         hass.services.async_register(DOMAIN, SERVICE_PLAY, async_handle_play)
     if not hass.services.has_service(DOMAIN, SERVICE_STOP):
@@ -321,6 +378,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     if not hass.services.has_service(DOMAIN, SERVICE_SELECT):
         hass.services.async_register(DOMAIN, SERVICE_SELECT, async_handle_select)
+    if not hass.services.has_service(DOMAIN, SERVICE_GENERATE):
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_GENERATE,
+            async_handle_generate,
+            supports_response=SupportsResponse.ONLY,
+        )
 
     return True
 
@@ -340,6 +404,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_remove(DOMAIN, SERVICE_CLEAR_HISTORY)
     hass.services.async_remove(DOMAIN, SERVICE_LIST_PLAYLISTS)
     hass.services.async_remove(DOMAIN, SERVICE_SELECT)
+    hass.services.async_remove(DOMAIN, SERVICE_GENERATE)
 
     hass.data.pop(DOMAIN, None)
     return True

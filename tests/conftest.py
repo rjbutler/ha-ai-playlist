@@ -69,6 +69,7 @@ _ha_modules["homeassistant.const"].Platform = _Platform
 # Add SupportsResponse stub
 class _SupportsResponse:
     OPTIONAL = "optional"
+    ONLY = "only"
 _ha_modules["homeassistant.core"].SupportsResponse = _SupportsResponse
 
 # Add HomeAssistantError stub
