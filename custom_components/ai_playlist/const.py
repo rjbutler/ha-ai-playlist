@@ -34,6 +34,7 @@ CONF_PLAYLIST_TRACK_COUNT: Final = "track_count"
 CONF_PLAYLIST_HISTORY_DEPTH: Final = "history_depth"
 CONF_PLAYLIST_REFILL_THRESHOLD: Final = "refill_threshold"
 CONF_PLAYLIST_EXCLUDE_LIVE: Final = "exclude_live"
+CONF_PLAYLIST_TAGS: Final = "tags"
 
 # Platforms
 PLATFORMS: Final = [Platform.SELECT, Platform.SENSOR]

@@ -43,6 +43,7 @@
         "data": {
           "name": "Playlist name",
           "prompt": "AI prompt",
+          "tags": "Tags (comma-separated, used by collections)",
           "track_count": "Tracks per generation",
           "history_depth": "History depth (tracks remembered)",
           "refill_threshold": "Refill when fewer than N tracks remain",
@@ -60,6 +61,7 @@
         "data": {
           "name": "Playlist name",
           "prompt": "AI prompt",
+          "tags": "Tags (comma-separated, used by collections)",
           "track_count": "Tracks per generation",
           "history_depth": "History depth (tracks remembered)",
           "refill_threshold": "Refill when fewer than N tracks remain",
@@ -74,7 +76,7 @@
       },
       "import_playlists": {
         "title": "Import Playlists",
-        "description": "Paste YAML with playlist definitions. Each entry needs 'name' and 'prompt'. Optional: track_count, history_depth, refill_threshold, exclude_live.",
+        "description": "Paste YAML with playlist definitions. Each entry needs 'name' and 'prompt'. Optional: tags (list), track_count, history_depth, refill_threshold, exclude_live.",
         "data": {
           "yaml_data": "YAML data"
         }
@@ -108,11 +110,14 @@
       },
       "edit_system_prompt": {
         "title": "Edit System Prompt",
-        "description": "Customize the instructions sent to the AI when generating tracks. The AI must output one track per line as 'Artist - Title' or 'Artist - Title | Album'.",
+        "description": "Customize the instructions sent to the AI when generating tracks. The default prompt requests JSON ([{\"artist\": \"...\", \"title\": \"...\", \"album\": \"...\"}]). If the AI returns plain text, the parser falls back to one track per line as 'Artist - Title' or 'Artist - Title | Album'.",
         "data": {
           "system_prompt": "System Prompt"
         }
       }
+    },
+    "error": {
+      "slug_collision": "This name conflicts with an existing playlist after slugification (different punctuation/spacing produces the same internal slug). Pick a more distinct name."
     },
     "abort": {
       "no_playlists": "No playlists configured yet. Add a playlist first.",

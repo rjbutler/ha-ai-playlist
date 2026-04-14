@@ -16,6 +16,7 @@ from .const import (
     CONF_PLAYLIST_NAME,
     CONF_PLAYLIST_PROMPT,
     CONF_PLAYLIST_REFILL_THRESHOLD,
+    CONF_PLAYLIST_TAGS,
     CONF_PLAYLIST_TRACK_COUNT,
     CONF_SYSTEM_PROMPT,
     DEFAULT_HISTORY_DEPTH,
@@ -26,6 +27,11 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _parse_tags(raw: str) -> list[str]:
+    """Split a comma-separated tag string into a stripped, non-empty list."""
+    return [t.strip() for t in raw.split(",") if t.strip()]
 
 
 class AiPlaylistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -92,14 +98,13 @@ class AiPlaylistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry):
-        return AiPlaylistOptionsFlow(config_entry)
+        return AiPlaylistOptionsFlow()
 
 
 class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for AI Playlist — playlist CRUD."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self._config_entry = config_entry
+    def __init__(self) -> None:
         self._edit_slug: str | None = None
         self._editing_collection_idx: int | None = None
 
@@ -121,20 +126,26 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_add_playlist(self, user_input=None):
         """Add a new playlist."""
+        errors = {}
         if user_input is not None:
             store = self.hass.data[DOMAIN]["store"]
-            await store.async_save_playlist(
-                user_input[CONF_PLAYLIST_NAME],
-                {
-                    "prompt": user_input[CONF_PLAYLIST_PROMPT],
-                    "track_count": int(user_input.get(CONF_PLAYLIST_TRACK_COUNT, DEFAULT_TRACK_COUNT)),
-                    "history_depth": int(user_input.get(CONF_PLAYLIST_HISTORY_DEPTH, DEFAULT_HISTORY_DEPTH)),
-                    "refill_threshold": int(user_input.get(CONF_PLAYLIST_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD)),
-                    "exclude_live": user_input.get(CONF_PLAYLIST_EXCLUDE_LIVE, False),
-                },
-            )
-            await self._refresh_select_entities()
-            return self.async_create_entry(title="", data={})
+            try:
+                await store.async_save_playlist(
+                    user_input[CONF_PLAYLIST_NAME],
+                    {
+                        "prompt": user_input[CONF_PLAYLIST_PROMPT],
+                        "track_count": int(user_input.get(CONF_PLAYLIST_TRACK_COUNT, DEFAULT_TRACK_COUNT)),
+                        "history_depth": int(user_input.get(CONF_PLAYLIST_HISTORY_DEPTH, DEFAULT_HISTORY_DEPTH)),
+                        "refill_threshold": int(user_input.get(CONF_PLAYLIST_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD)),
+                        "exclude_live": user_input.get(CONF_PLAYLIST_EXCLUDE_LIVE, False),
+                        "tags": _parse_tags(user_input.get(CONF_PLAYLIST_TAGS, "")),
+                    },
+                )
+            except ValueError:
+                errors[CONF_PLAYLIST_NAME] = "slug_collision"
+            else:
+                await self._refresh_select_entities()
+                return self.async_create_entry(title="", data=dict(self.config_entry.options))
 
         return self.async_show_form(
             step_id="add_playlist",
@@ -144,6 +155,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(CONF_PLAYLIST_PROMPT): selector.TextSelector(
                         selector.TextSelectorConfig(multiline=True)
                     ),
+                    vol.Optional(CONF_PLAYLIST_TAGS, default=""): selector.TextSelector(),
                     vol.Optional(CONF_PLAYLIST_TRACK_COUNT, default=DEFAULT_TRACK_COUNT): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=3, max=50, mode="box")
                     ),
@@ -156,6 +168,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(CONF_PLAYLIST_EXCLUDE_LIVE, default=False): selector.BooleanSelector(),
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_edit_playlist(self, user_input=None):
@@ -194,23 +207,30 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
         playlists = store.get_all_playlists()
         current = playlists.get(self._edit_slug, {})
 
+        errors = {}
         if user_input is not None:
-            await store.async_save_playlist(
-                user_input.get(CONF_PLAYLIST_NAME, current.get("name", "")),
-                {
-                    "prompt": user_input[CONF_PLAYLIST_PROMPT],
-                    "track_count": int(user_input.get(CONF_PLAYLIST_TRACK_COUNT, DEFAULT_TRACK_COUNT)),
-                    "history_depth": int(user_input.get(CONF_PLAYLIST_HISTORY_DEPTH, DEFAULT_HISTORY_DEPTH)),
-                    "refill_threshold": int(user_input.get(CONF_PLAYLIST_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD)),
-                    "exclude_live": user_input.get(CONF_PLAYLIST_EXCLUDE_LIVE, False),
-                },
-            )
-            # If name changed, remove old entry
-            new_name = user_input.get(CONF_PLAYLIST_NAME, "")
-            if new_name and store._playlist_slug(new_name) != self._edit_slug:
-                await store.async_delete_playlist(current.get("name", ""))
-            await self._refresh_select_entities()
-            return self.async_create_entry(title="", data={})
+            new_name = user_input.get(CONF_PLAYLIST_NAME, current.get("name", ""))
+            try:
+                # If renaming to a different slug, delete the old slug first
+                # so async_save_playlist doesn't see a stale collision.
+                if new_name and store._playlist_slug(new_name) != self._edit_slug:
+                    await store.async_delete_playlist(current.get("name", ""))
+                await store.async_save_playlist(
+                    new_name,
+                    {
+                        "prompt": user_input[CONF_PLAYLIST_PROMPT],
+                        "track_count": int(user_input.get(CONF_PLAYLIST_TRACK_COUNT, DEFAULT_TRACK_COUNT)),
+                        "history_depth": int(user_input.get(CONF_PLAYLIST_HISTORY_DEPTH, DEFAULT_HISTORY_DEPTH)),
+                        "refill_threshold": int(user_input.get(CONF_PLAYLIST_REFILL_THRESHOLD, DEFAULT_REFILL_THRESHOLD)),
+                        "exclude_live": user_input.get(CONF_PLAYLIST_EXCLUDE_LIVE, False),
+                        "tags": _parse_tags(user_input.get(CONF_PLAYLIST_TAGS, "")),
+                    },
+                )
+            except ValueError:
+                errors[CONF_PLAYLIST_NAME] = "slug_collision"
+            else:
+                await self._refresh_select_entities()
+                return self.async_create_entry(title="", data=dict(self.config_entry.options))
 
         return self.async_show_form(
             step_id="edit_playlist_form",
@@ -220,6 +240,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(CONF_PLAYLIST_PROMPT, default=current.get("prompt", "")): selector.TextSelector(
                         selector.TextSelectorConfig(multiline=True)
                     ),
+                    vol.Optional(CONF_PLAYLIST_TAGS, default=", ".join(current.get("tags", []))): selector.TextSelector(),
                     vol.Optional(CONF_PLAYLIST_TRACK_COUNT, default=current.get("track_count", DEFAULT_TRACK_COUNT)): selector.NumberSelector(
                         selector.NumberSelectorConfig(min=3, max=50, mode="box")
                     ),
@@ -232,6 +253,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(CONF_PLAYLIST_EXCLUDE_LIVE, default=current.get("exclude_live", False)): selector.BooleanSelector(),
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_delete_playlist(self, user_input=None):
@@ -247,7 +269,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
             config = playlists.get(slug, {})
             await store.async_delete_playlist(config.get("name", slug))
             await self._refresh_select_entities()
-            return self.async_create_entry(title="", data={})
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
 
         options = {slug: cfg["name"] for slug, cfg in playlists.items()}
 
@@ -274,7 +296,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
             count = await store.async_import_playlists(user_input["yaml_data"])
             _LOGGER.info("Imported %d playlists", count)
             await self._refresh_select_entities()
-            return self.async_create_entry(title="", data={})
+            return self.async_create_entry(title="", data=dict(self.config_entry.options))
 
         return self.async_show_form(
             step_id="import_playlists",
@@ -291,20 +313,16 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
         """Add a new collection."""
         if user_input is not None:
             name = user_input[CONF_COLLECTION_NAME].strip()
-            tags_raw = user_input.get(CONF_COLLECTION_TAGS, "")
-            tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+            tags = _parse_tags(user_input.get(CONF_COLLECTION_TAGS, ""))
 
             collections = list(self.config_entry.options.get(CONF_COLLECTIONS, []))
             collections.append({CONF_COLLECTION_NAME: name, CONF_COLLECTION_TAGS: tags})
 
             new_options = dict(self.config_entry.options)
             new_options[CONF_COLLECTIONS] = collections
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, options=new_options
-            )
-
-            # Reload entry to create the new select entity
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            # Persist via async_create_entry; the entry's update_listener
+            # (registered in async_setup_entry) handles the reload that
+            # creates the new select entity.
             return self.async_create_entry(title="", data=new_options)
 
         return self.async_show_form(
@@ -349,17 +367,12 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             name = user_input[CONF_COLLECTION_NAME].strip()
-            tags_raw = user_input.get(CONF_COLLECTION_TAGS, "")
-            tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+            tags = _parse_tags(user_input.get(CONF_COLLECTION_TAGS, ""))
 
             collections[self._editing_collection_idx] = {CONF_COLLECTION_NAME: name, CONF_COLLECTION_TAGS: tags}
 
             new_options = dict(self.config_entry.options)
             new_options[CONF_COLLECTIONS] = collections
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, options=new_options
-            )
-            await self._refresh_select_entities()
             return self.async_create_entry(title="", data=new_options)
 
         return self.async_show_form(
@@ -386,11 +399,6 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
 
             new_options = dict(self.config_entry.options)
             new_options[CONF_COLLECTIONS] = collections
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, options=new_options
-            )
-            # Reload entry to remove the select entity
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             return self.async_create_entry(title="", data=new_options)
 
         collection_names = {str(i): cfg[CONF_COLLECTION_NAME] for i, cfg in enumerate(collections)}
@@ -410,9 +418,6 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             new_options = dict(self.config_entry.options)
             new_options[CONF_SYSTEM_PROMPT] = user_input[CONF_SYSTEM_PROMPT]
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, options=new_options
-            )
             return self.async_create_entry(title="", data=new_options)
 
         current_prompt = self.config_entry.options.get(
