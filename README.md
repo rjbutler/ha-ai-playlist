@@ -4,6 +4,10 @@ AI-powered playlist generation for Home Assistant + Music Assistant.
 
 Uses any AI Task provider (Anthropic, OpenAI, Google, Ollama, etc.) to generate tracks based on text prompts, enqueue them on Music Assistant speakers, and automatically refill as you listen.
 
+## AI Assisted 
+
+Full disclosure, although this was originally a set of scripts, automations and pyscript I wrote myself, in it's current form it's probably 80% AI coded using Claude Code.  
+
 ## Prerequisites
 
 - **Home Assistant 2025.8+** (required for AI Task integration)

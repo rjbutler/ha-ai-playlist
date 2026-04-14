@@ -7,10 +7,20 @@
         "data": {
           "ai_entity": "AI Task Entity"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure AI Playlist",
+        "description": "Change the AI Task entity used for generating playlists.",
+        "data": {
+          "ai_entity": "AI Task Entity"
+        }
       }
     },
     "error": {
       "no_ai_entity": "Please select an AI Task entity."
+    },
+    "abort": {
+      "reconfigure_successful": "AI Task entity updated successfully."
     }
   },
   "options": {

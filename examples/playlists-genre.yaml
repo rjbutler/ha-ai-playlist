@@ -1,0 +1,322 @@
+# Genre playlists for AI Playlist import
+#
+# Import via: Settings > Integrations > AI Playlist > Configure > Import playlists from YAML
+
+- name: Classic Rock Foundations
+  prompt: Generate a playlist of classic rock songs from artists such as The Beatles, The Rolling Stones, The Kinks, Led Zeppelin,
+    The Doors, Jefferson Airplane, Jimi Hendrix, The Byrds, The Animals, Steve Miller Band, The Who, The Zombies, Tom Petty,
+    Van Morrison, Warren Zevon, Grand Funk Railroad, Free, Santana, Cream, Crosby Stills & Nash, The Eagles. Include similar
+    songs and artists that fit the classic rock foundation style.  
+  tags:
+  - genre
+  - rock
+  exclude_live: true
+- name: Arena Rock & Stadium Anthems
+  prompt: Generate a playlist of arena rock and stadium anthem songs from artists such as Journey, Foreigner, REO Speedwagon,
+    Def Leppard, Heart, Scorpions, Styx, Toto, Van Halen, Queen, U2, Boston, Bon Jovi, Starship, Status Quo. Include similar
+    songs and artists that match the big, anthemic rock sound. Weight heavily toward the 1970s and 1980s, with some newer
+    selections mixed in. 
+  tags:
+  - genre
+  - rock
+  exclude_live: true
+- name: Synth-Pop, New Wave & Alternative
+  prompt: Generate a playlist of synth-pop, new wave, and alternative rock songs from artists such as A-Ha, The Cars, Eurythmics,
+    The Cure, The Cranberries, Simple Minds, Tears For Fears, They Might Be Giants, Dexy's Midnight Runners, Owl City, Fitz
+    and The Tantrums, Everclear, Jimmy Eat World, Pearl Jam, Hootie & The Blowfish, Duran Duran, Depeche Mode, New Order,
+    The Human League, Talking Heads, Smashing Pumpkins, Foo Fighters, Green Day, Radiohead. Include similar songs and artists
+    that fit this style. Weight heavily toward the 1980s, with some 90s and newer selections mixed in.  
+  tags:
+  - genre
+  - rock
+  - pop
+  - electronic
+  exclude_live: true
+- name: Psychedelic & Art Rock
+  prompt: Generate a playlist of psychedelic and art rock songs from artists such as Pink Floyd, The Alan Parsons Project,
+    Genesis, Queen, Supertramp, Tears For Fears, David Bowie, Roxy Music, Talking Heads, King Crimson, The Beatles (psychedelic
+    era), The Doors, Jefferson Airplane. Include similar songs and artists that fit the psychedelic and art rock tradition.
+  tags:
+  - genre
+  - rock
+  exclude_live: true
+- name: Progressive Rock
+  prompt: Generate a playlist of progressive rock songs from artists such as Pink Floyd, Yes, Genesis, King Crimson, Emerson
+    Lake & Palmer, Jethro Tull, Rush, Camel, Gentle Giant, Supertramp, The Alan Parsons Project, Mike Oldfield, Focus, Renaissance,
+    Kansas, The Moody Blues. Include similar songs and artists that fit this style. Weight heavily toward the 1970s and early
+    1980s. 
+  tags:
+  - genre
+  - rock
+  exclude_live: true
+- name: Singer-Songwriter & Soft Rock
+  prompt: Generate a playlist of singer-songwriter and soft rock songs from artists such as James Taylor, Gerry Rafferty,
+    Paul Simon, Sarah McLachlan, Tori Amos, Stevie Nicks, Norah Jones, Ingrid Michaelson, Jack Johnson, Iron & Wine, Feist,
+    Jackson Browne, John Mellencamp, Bruce Springsteen, Bob Dylan, Neil Young, Carole King, Joni Mitchell, Leonard Cohen,
+    Damien Rice, Cat Stevens. Include similar songs and artists that fit this style. 
+  tags:
+  - genre
+  - rock
+  - folk
+  exclude_live: true
+- name: Folk Rock & Acoustic Singer-Songwriters
+  prompt: Generate a playlist of folk rock and acoustic singer-songwriter songs from artists such as Crosby Stills & Nash,
+    Cat Stevens, Joni Mitchell, Simon & Garfunkel, Jackson Browne, James Taylor, Bob Dylan, Neil Young, Paul Simon, Damien
+    Rice, Iron & Wine, Sarah McLachlan. Include similar songs and artists that fit this style. 
+  tags:
+  - genre
+  - folk
+  - rock
+  exclude_live: true
+- name: Blues Rock & Roots Rock
+  prompt: Generate a playlist of blues rock and roots rock songs from artists such as Stevie Ray Vaughan, Eric Clapton, Rory
+    Gallagher, Gary Moore, ZZ Top, Allman Brothers Band, Lynyrd Skynyrd, The Marshall Tucker Band, Tom Petty, Neil Young,
+    Bruce Springsteen, Van Morrison. Include similar songs and artists that fit this style. 
+  tags:
+  - genre
+  - rock
+  - blues
+  exclude_live: true
+- name: Delta & Acoustic Blues
+  prompt: Generate a playlist of Delta and acoustic blues songs from artists such as Robert Johnson, Son House, Charley Patton,
+    Skip James, Mississippi John Hurt, Blind Willie McTell, Lightnin' Hopkins, Big Bill Broonzy, Bukka White, Lead Belly,
+    Blind Lemon Jefferson, Rev. Gary Davis, Elizabeth Cotten, Keb' Mo', Corey Harris. Include similar songs and artists that
+    fit this style. Weight toward the classic 1920s-1940s recordings and 1960s revival era, with some modern acoustic blues
+    mixed in.
+  tags:
+  - genre
+  - blues
+  exclude_live: true
+- name: Classic Blues & Jump Blues
+  prompt: Generate a playlist of classic blues and jump blues songs from artists such as T-Bone Walker, Big Joe Turner, Louis
+    Jordan, Willie Dixon, Wynonie Harris, Roy Brown, Jimmy Rushing, Charles Brown, Amos Milburn, Jimmy Reed, Little Walter,
+    Big Mama Thornton, Ruth Brown, Clarence 'Gatemouth' Brown. Include similar songs and artists that fit this style. Focus
+    on the 1940s and 1950s. 
+  tags:
+  - genre
+  - blues
+  exclude_live: true
+- name: Chicago & Electric Blues
+  prompt: Generate a playlist of Chicago and electric blues songs from artists such as Muddy Waters, Howlin' Wolf, B.B. King,
+    Buddy Guy, Albert King, Albert Collins, Otis Rush, Magic Sam, Junior Wells, Elmore James, Freddie King, Luther Allison,
+    Koko Taylor, Hound Dog Taylor, Robert Cray. Include similar songs and artists that fit this style. Weight toward the 1950s
+    through 1970s, with some 1980s selections mixed in. 
+  tags:
+  - genre
+  - blues
+  exclude_live: true
+- name: Surf Rock & Instrumental Rock
+  prompt: Generate a playlist of surf rock and instrumental rock songs from artists such as Dick Dale, The Ventures, The Surfaris,
+    The Chantays, Link Wray, Duane Eddy, The Shadows, Santo & Johnny, The Tornados, Booker T. & the MG's, The Lively Ones,
+    The Astronauts, The Marketts. Include similar songs and artists that fit this style. Weight heavily toward the late 1950s
+    through mid 1960s. 
+  tags:
+  - genre
+  - rock
+  exclude_live: true
+- name: British Invasion & Mod
+  prompt: Generate a playlist of British Invasion and mod rock songs from artists such as The Beatles (early), The Rolling
+    Stones (early), The Kinks, The Who, The Yardbirds, The Animals, The Zombies, The Hollies, Small Faces, The Dave Clark
+    Five, Manfred Mann, Herman's Hermits, The Spencer Davis Group, The Troggs, Gerry and the Pacemakers, Donovan. Include
+    similar songs and artists that fit this style. Focus on the early to late 1960s. 
+  tags:
+  - genre
+  - rock
+  exclude_live: true
+- name: Punk, Post-Punk & New Wave
+  prompt: Generate a playlist of punk, post-punk, and new wave songs from artists such as The Clash, The Ramones, Buzzcocks,
+    The Jam, Joy Division, Siouxsie and the Banshees, Echo & the Bunnymen, The Smiths, Wire, Television, Blondie, The Pretenders,
+    XTC, Gang of Four, Magazine, Bauhaus, The Psychedelic Furs. Include similar songs and artists that fit this style. Weight
+    heavily toward the late 1970s and 1980s. 
+  tags:
+  - genre
+  - rock
+  exclude_live: true
+- name: Grunge & 90s Alternative
+  prompt: Generate a playlist of grunge and 90s alternative rock songs from artists such as Nirvana, Pearl Jam, Soundgarden,
+    Alice in Chains, Stone Temple Pilots, Smashing Pumpkins, R.E.M., Radiohead, Weezer, Foo Fighters, Pixies, Garbage, Bush,
+    Live, Collective Soul, Toad the Wet Sprocket, Counting Crows, Blind Melon, Temple of the Dog. Include similar songs and
+    artists that fit this style. Focus on the early 1990s through late 1990s. 
+  tags:
+  - genre
+  - rock
+  exclude_live: true
+- name: Power Pop & Jangle Pop
+  prompt: Generate a playlist of power pop and jangle pop songs from artists such as Big Star, The Raspberries, Cheap Trick,
+    Badfinger, The Knack, The dB's, Marshall Crenshaw, Nick Lowe, Elvis Costello, Squeeze, The Plimsouls, Tommy Keene, Matthew
+    Sweet, Material Issue, The Posies, Jellyfish, Teenage Fanclub. Include similar songs and artists that fit this style.
+  tags:
+  - genre
+  - rock
+  - pop
+  exclude_live: true
+- name: Yacht Rock & Mellow Gold
+  prompt: Generate a playlist of yacht rock and mellow gold songs from artists such as Steely Dan, Christopher Cross, Michael
+    McDonald, Hall & Oates, Toto, Robbie Dupree, Pablo Cruise, Ambrosia, Player, Boz Scaggs, Kenny Loggins, Gerry Rafferty,
+    England Dan & John Ford Coley, Andrew Gold, Bread, Seals & Crofts, Little River Band. Include similar songs and artists
+    that fit this style. Focus on the late 1970s through mid 1980s.  Only include songs that are relatively popular within
+    their genre. 
+  tags:
+  - genre
+  - rock
+  - pop
+  exclude_live: true
+- name: Pop & Radio-Friendly Rock
+  prompt: Generate a playlist of pop and radio-friendly rock songs from artists such as Badfinger, The Knack, The Romantics,
+    Rick Springfield, The Rembrandts, Glass Tiger, Mr. Mister, Richard Marx, Spin Doctors, Tommy Tutone, Toni Basil, Cheap
+    Trick, The Raspberries, Big Star, The Bangles. The majority of the songs should be from the mid 1960s through the mid
+    1980s. Include similar songs and artists that fit this style.  Only include songs that are relatively popular within
+    their genre. 
+  tags:
+  - genre
+  - rock
+  - pop
+  exclude_live: true
+- name: Retro Pop & Sunshine Harmonies
+  prompt: Generate a playlist of retro pop and sunshine harmony songs from artists such as The Beach Boys, The Association,
+    The Archies, The Cyrkle, The Grass Roots, The Foundations, The Lovin' Spoonful, Herman's Hermits. Include similar songs
+    and artists that fit this style. 
+  tags:
+  - genre
+  - pop
+  exclude_live: true
+- name: Funk, Disco & Groove
+  prompt: Generate a playlist of funk, disco, and groove songs from artists such as Parliament-Funkadelic, Earth Wind & Fire,
+    Kool & the Gang, Chic, The Commodores, KC and the Sunshine Band, The Ohio Players, Tower of Power, Sly & the Family Stone,
+    Donna Summer, Bee Gees (disco era), Rick James, The Gap Band, Cameo, Con Funk Shun. Include similar songs and artists
+    that fit this style. Weight heavily toward the 1970s and early 1980s. 
+  tags:
+  - genre
+  - soul
+  - funk
+  exclude_live: true
+- name: Soul, R&B & Smooth Fusion
+  prompt: Generate a playlist of soul, R&B, and smooth fusion songs from artists such as Otis Redding, The Rascals, Hall &
+    Oates, Huey Lewis And The News, Philip Bailey & Phil Collins, Rusted Root, Salvador, Marvin Gaye, Stevie Wonder, Aretha
+    Franklin, Al Green, Robbie Dupree, Exile, Manu Chao, Buena Vista Social Club. Include similar songs and artists that fit
+    this style. 
+  tags:
+  - genre
+  - soul
+  exclude_live: true
+- name: Motown & Classic R&B
+  prompt: Generate a playlist of Motown and classic R&B songs from artists such as The Temptations, The Supremes, Marvin Gaye,
+    Stevie Wonder, The Four Tops, Smokey Robinson & The Miracles, The Jackson 5, Martha and the Vandellas, Gladys Knight &
+    the Pips, Sam Cooke, The Drifters, Ben E. King, The Isley Brothers, Curtis Mayfield, Jackie Wilson, Wilson Pickett, Percy
+    Sledge. Include similar songs and artists that fit this style. Focus on the 1960s and 1970s. 
+  tags:
+  - genre
+  - soul
+  exclude_live: true
+- name: Neo-Soul & Modern R&B
+  prompt: Generate a playlist of neo-soul and modern R&B songs from artists such as D'Angelo, Erykah Badu, Lauryn Hill, Maxwell,
+    Jill Scott, Alicia Keys, Leon Bridges, Anderson .Paak, Amy Winehouse, Raphael Saadiq, Musiq Soulchild, India.Arie, John
+    Legend, Adele, Sam Smith, H.E.R. Include similar songs and artists that fit this style. Focus on the late 1990s through
+    present. 
+  tags:
+  - genre
+  - soul
+  exclude_live: true
+- name: Americana & Roots Rock
+  prompt: Generate a playlist of Americana and roots rock songs from artists such as Tom Petty & the Heartbreakers, The Band,
+    Creedence Clearwater Revival, Wilco, The Wallflowers, Ryan Adams, Lucinda Williams, John Hiatt, Los Lobos, Steve Earle,
+    Jason Isbell, The Jayhawks, Uncle Tupelo, Drive-By Truckers, Bonnie Raitt, Little Feat, The Black Crowes. Include similar
+    songs and artists that fit this style. Weight toward the 1970s and 1980s, with some newer selections mixed in. Focus on
+    the rock side of Americana, not country. 
+  tags:
+  - genre
+  - rock
+  - folk
+  exclude_live: true
+- name: Bossa Nova & Latin Jazz
+  prompt: Generate a playlist of bossa nova and Latin jazz songs from artists such as Antonio Carlos Jobim, João Gilberto,
+    Stan Getz, Astrud Gilberto, Sérgio Mendes, Luiz Bonfá, Tito Puente, Cal Tjader, Mongo Santamaría, Eddie Palmieri, Buena
+    Vista Social Club, Gato Barbieri, Wes Montgomery (Latin recordings), Charlie Byrd. Include similar songs and artists that
+    fit this style. Weight toward the 1950s through 1970s, with some newer selections mixed in. 
+  tags:
+  - genre
+  - jazz
+  - world
+  exclude_live: true
+- name: Reggae & Ska
+  prompt: 'Generate a playlist of reggae and ska songs from artists such as Bob Marley & The Wailers, Peter Tosh, Jimmy Cliff,
+    Toots & the Maytals, Desmond Dekker, Lee ''Scratch'' Perry, Gregory Isaacs, Burning Spear, Steel Pulse, Black Uhuru, The
+    Skatalites, Prince Buster, The Specials, Madness, The English Beat, UB40.  Weight toward the 1960s through 1980s, with
+    some newer selections mixed in. '
+  tags:
+  - genre
+  - world
+  exclude_live: true
+- name: Afrobeat & World Grooves
+  prompt: Generate a playlist of Afrobeat and world groove songs from artists such as Fela Kuti, King Sunny Ade, Tinariwen,
+    Bombino, Orchestra Baobab, Ali Farka Touré, Youssou N'Dour, Angélique Kidjo, Salif Keita, Manu Dibango, Miriam Makeba,
+    Hugh Masekela, Mulatu Astatke, Amadou & Mariam. Include similar songs and artists that fit this style. Weight toward the
+    1970s and 1980s where available, but include modern Afrobeat and desert blues artists. 
+  tags:
+  - genre
+  - world
+  exclude_live: true
+- name: Celtic & Irish Folk
+  prompt: Generate a playlist of Celtic and Irish folk songs from artists such as The Chieftains, Lúnasa, Planxty, Clannad,
+    De Dannan, The Dubliners, The Pogues, Christy Moore, Andy Irvine, Dervish, Altan, Capercaillie, Silly Wizard, Battlefield
+    Band, The Bothy Band, Enya, Loreena McKennitt. Include similar songs and artists that fit this style. Include both instrumental
+    and vocal tracks. 
+  tags:
+  - genre
+  - folk
+  - world
+  exclude_live: true
+- name: Electronic & Chillout
+  prompt: Generate a playlist of electronic and chillout songs from artists such as Air, Zero 7, Boards of Canada, Tycho,
+    Massive Attack, Portishead, Morcheeba, Thievery Corporation, Groove Armada, Kruder & Dorfmeister, Bonobo, Nightmares on
+    Wax, DJ Shadow, UNKLE, Moby, Röyksopp, Caribou. Include similar songs and artists that fit this style. Exclude purely
+    abrasive or heavy electronic genres like industrial or hardcore techno. 
+  tags:
+  - genre
+  - electronic
+  exclude_live: true
+- name: Coffeehouse Jazz
+  prompt: Generate a playlist of coffeehouse jazz songs from artists such as Diana Krall, Norah Jones, Madeleine Peyroux,
+    Chet Baker, Stan Getz, Dave Brubeck, Michael Franks, Chris Botti. Include similar songs and artists that fit this style.
+       
+  tags:
+  - genre
+  - jazz
+  exclude_live: true
+- name: Classic Jazz Standards
+  prompt: Generate a playlist of classic jazz standards from artists such as Duke Ellington, Count Basie, Charlie Parker,
+    Dizzy Gillespie, Miles Davis (early), John Coltrane (early). Include similar songs and artists that fit the classic jazz
+    standard tradition.  
+  tags:
+  - genre
+  - jazz
+  exclude_live: true
+- name: Cool Jazz & West Coast Jazz
+  prompt: Generate a playlist of cool jazz and West Coast jazz songs from artists such as Miles Davis (Kind of Blue era),
+    Dave Brubeck, Chet Baker, Gerry Mulligan, Stan Getz. Include similar songs and artists that fit this style. 
+  tags:
+  - genre
+  - jazz
+  exclude_live: true
+- name: Jazz Fusion & Rock-Influenced Jazz
+  prompt: Generate a playlist of jazz fusion and rock-influenced jazz songs from artists such as Weather Report, Mahavishnu
+    Orchestra, Herbie Hancock, Return to Forever, Steely Dan, Pat Metheny Group. Include similar songs and artists that fit
+    this style. 
+  tags:
+  - genre
+  - jazz
+  exclude_live: true
+- name: Vocal Jazz & Crooners
+  prompt: Generate a playlist of vocal jazz and crooner songs from artists such as Ella Fitzgerald, Sarah Vaughan, Frank Sinatra,
+    Tony Bennett, Diana Krall, Madeleine Peyroux, Norah Jones. Include similar songs and artists that fit this style. 
+  tags:
+  - genre
+  - jazz
+  exclude_live: true
+- name: Contemporary & Smooth Jazz
+  prompt: Generate a playlist of contemporary and smooth jazz songs from artists such as George Benson, Spyro Gyra, Kenny
+    G, Chris Botti, David Sanborn. Include similar songs and artists that fit this style. 
+  tags:
+  - genre
+  - jazz
+  exclude_live: true
