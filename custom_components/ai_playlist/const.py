@@ -59,5 +59,5 @@ Rules:
 6. OUTPUT ONLY: Return only the JSON array. No commentary, numbering, or explanations."""
 
 EXCLUDE_LIVE_DIRECTIVE: Final = (
-    "Select original studio recordings only, no live versions or live albums."
+    "Select studio recordings only, no live versions or live albums."
 )

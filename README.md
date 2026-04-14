@@ -44,7 +44,7 @@ Named prompt + settings combinations. Each playlist has:
 | Track count | 10 | Tracks generated per AI call |
 | History depth | 50 | Tracks remembered to avoid repeats |
 | Refill threshold | 2 | Remaining tracks before auto-refill triggers |
-| Exclude live | off | Filter out live recordings |
+| Exclude live | off | Filter out live recordings.  How well this works depends on the AI task model, some are better than others.  They still sometimes slip through. |
 
 You can also **import playlists from YAML** — paste a YAML list into the import form. See [examples/](examples/) for ready-to-import files.
 
