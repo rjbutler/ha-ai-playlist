@@ -235,6 +235,16 @@ sequence:
 
 Sessions survive HA restarts — the integration resurrects active coordinators on startup.
 
+## Data Sent to the AI Provider
+
+Every generation and refill sends the following to the AI Task entity you've configured:
+
+- The system prompt (default or your customized version)
+- Your playlist prompt (or the ad-hoc prompt passed to `ai_playlist.play` / `ai_playlist.generate`)
+- The track history for that playlist (artist + title strings, up to `history_depth`) and the currently-enqueued tracks, used as an exclusion list to prevent repeats
+
+No media-player state, account info, or other Home Assistant data is sent. Choose your AI provider accordingly — local options like Ollama keep everything on your network.
+
 ## License
 
 MIT

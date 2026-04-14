@@ -58,7 +58,6 @@ async def generate_tracks(
     playlist_name = playlist_config.get("name", "")
     exclude_live = playlist_config.get("exclude_live", False)
 
-    # Build user prompt (same structure as _build_user_prompt)
     parts = [playlist_config.get("prompt", ""), f"\nGenerate {track_count} tracks."]
     exclusion = [*history, *enqueued]
     if exclusion:
@@ -85,16 +84,30 @@ async def generate_tracks(
         _LOGGER.exception("AI generation failed for '%s'", playlist_name)
         raise HomeAssistantError(f"AI generation failed: {err}") from err
 
-    raw_text = ""
+    raw_data = None
     if isinstance(response, dict):
-        raw_text = response.get("data", "")
+        raw_data = response.get("data")
     elif hasattr(response, "data"):
-        raw_text = response.data or ""
+        raw_data = response.data
 
-    parsed = parse_ai_response(raw_text)
+    if raw_data is None:
+        raise HomeAssistantError(
+            f"AI returned no data for '{playlist_name}' "
+            f"(response shape: {type(response).__name__}). "
+            f"Check that {ai_entity_id} is configured and reachable."
+        )
+    if not isinstance(raw_data, str):
+        raise HomeAssistantError(
+            f"AI returned non-string data for '{playlist_name}' "
+            f"(got {type(raw_data).__name__}). The integration expects plain "
+            f"text or JSON; structured-output mode is not supported."
+        )
+
+    parsed = parse_ai_response(raw_data)
     if not parsed:
         raise HomeAssistantError(
-            f"AI returned no parseable tracks for '{playlist_name}'"
+            f"AI returned no parseable tracks for '{playlist_name}'. "
+            f"First 200 chars of response: {raw_data[:200]!r}"
         )
 
     # Map filtered strings back to dicts
@@ -150,6 +163,7 @@ class PlaylistCoordinator:
         self._generating: bool = False
         self._last_queue_check: float = 0.0
         self._last_recorded_track: tuple[str, str] | None = None
+        self._last_internal_queue_clear: float = 0.0
         self._initial_enqueue_count: int = 0
         self._queue_id: str | None = None
 
@@ -294,9 +308,19 @@ class PlaylistCoordinator:
             await self._detach()
             return
 
-        # Queue cleared to 0 = genuine stop or external takeover
+        # Queue cleared to 0 = genuine stop or external takeover —
+        # but suppress for a few seconds after our own "replace" enqueue,
+        # whose clear event can arrive after STATE_ENQUEUING ends.
         items = data.get("items", -1)
         if items == 0:
+            since_internal_clear = time.monotonic() - self._last_internal_queue_clear
+            if since_internal_clear < 5.0:
+                _LOGGER.debug(
+                    "Ignoring queue items=0 event for %s (%.1fs after internal clear)",
+                    self.entity_id,
+                    since_internal_clear,
+                )
+                return
             _LOGGER.info(
                 "Detaching from %s — queue cleared to 0 (queue event)",
                 self.entity_id,
@@ -335,6 +359,14 @@ class PlaylistCoordinator:
         """Enqueue tracks to Music Assistant."""
         self.state = STATE_ENQUEUING
 
+        # When we issue a "replace" enqueue, MA clears the queue first.
+        # That clear emits a QUEUE_UPDATED event with items=0 which can
+        # arrive after we've returned to STATE_PLAYING; without this
+        # marker, _async_handle_queue_update would treat it as an
+        # external clear and detach. The grace window is checked there.
+        if clear_first:
+            self._last_internal_queue_clear = time.monotonic()
+
         player_state = self.hass.states.get(self.entity_id)
         is_playing = player_state and player_state.state == "playing"
 
@@ -365,22 +397,6 @@ class PlaylistCoordinator:
                 self.enqueued_tracks.append(track_dict_to_string(track))
             except Exception:
                 _LOGGER.warning("Failed to enqueue track: %s - %s", artist, title)
-
-    def _build_user_prompt(
-        self, history: list[str], enqueued: list[str]
-    ) -> str:
-        """Build the user prompt with exclusion list."""
-        parts = [self.playlist_config.get("prompt", "")]
-        parts.append(f"\nGenerate {self.track_count} tracks.")
-
-        exclusion = [*history, *enqueued]
-        if exclusion:
-            exclusion_text = "\n".join(exclusion)
-            parts.append(
-                f"\nDo not include any of these tracks:\n{exclusion_text}"
-            )
-
-        return "\n".join(parts)
 
     async def _check_queue_depth(self) -> tuple[int, int]:
         """Get queue item count and current index from Music Assistant."""
@@ -482,7 +498,7 @@ class PlaylistCoordinator:
         await self._generate_and_enqueue(self.track_count, clear_first=False)
         self.state = STATE_PLAYING
 
-    async def _assess_resurrection_confidence(self) -> str:
+    async def async_assess_resurrection_confidence(self) -> str:
         """Check whether an active session on this player can be resurrected.
 
         Returns 'high' (current track matches history/cache), 'low' (queue has

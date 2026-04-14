@@ -75,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 entry=entry,
             )
 
-            confidence = await coordinator._assess_resurrection_confidence()
+            confidence = await coordinator.async_assess_resurrection_confidence()
             if confidence == "none":
                 _LOGGER.info(
                     "Skipping resurrection for %s — player off or queue empty", entity_id
@@ -84,8 +84,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 continue
 
             _LOGGER.info(
-                "Resurrecting coordinator for '%s' on %s (confidence: %s)",
-                playlist_name, entity_id, confidence,
+                "Resurrecting coordinator for '%s' on %s (ai_entity=%s, confidence=%s) — "
+                "any per-session ai_entity override from before the restart is not "
+                "persisted; falling back to the configured default",
+                playlist_name, entity_id, coordinator.ai_entity_id, confidence,
             )
             await coordinator.async_resume_after_restart()
             coordinators[entity_id] = coordinator
@@ -117,7 +119,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         store = hass.data[DOMAIN]["store"]
         entry = hass.data[DOMAIN]["entry"]
 
-        _LOGGER.info(
+        _LOGGER.debug(
             "ai_playlist.play called: entity_id=%s, playlist=%s, prompt=%s, data=%s, target=%s",
             entity_id,
             call.data.get("playlist"),
@@ -248,6 +250,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def async_handle_clear_history(call: ServiceCall) -> None:
         playlist_name = call.data["playlist"]
         store = hass.data[DOMAIN]["store"]
+        if not store.get_playlist(playlist_name):
+            raise HomeAssistantError(f"Playlist '{playlist_name}' not found")
         await store.async_clear_history(playlist_name)
         _LOGGER.info("Cleared history for playlist '%s'", playlist_name)
 
@@ -385,6 +389,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async_handle_generate,
             supports_response=SupportsResponse.ONLY,
         )
+
+    async def _async_options_updated(_hass: HomeAssistant, _entry: ConfigEntry) -> None:
+        await hass.config_entries.async_reload(entry.entry_id)
+
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     return True
 
