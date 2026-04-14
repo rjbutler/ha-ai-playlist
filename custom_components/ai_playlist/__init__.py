@@ -128,6 +128,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         track_count = call.data.get("track_count")
         clear_queue = call.data.get("clear_queue", True)
         collection_name = call.data.get("collection")
+        ai_entity_override = call.data.get("ai_entity")
 
         # Coerce track_count from float (NumberSelector) to int
         if track_count is not None:
@@ -207,6 +208,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entity_id=entity_id,
             entry=entry,
         )
+        if ai_entity_override:
+            coordinator.ai_entity_id = ai_entity_override
         coordinators[entity_id] = coordinator
 
         await coordinator.async_start(

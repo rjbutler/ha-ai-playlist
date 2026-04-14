@@ -42,6 +42,13 @@ play:
       required: false
       selector:
         text:
+    ai_entity:
+      name: AI Task Entity
+      description: Override the configured AI Task entity for this session (applies to initial generation and refills). If omitted, the entity configured during setup is used. Note — the override is not persisted across HA restarts; resurrected sessions fall back to the configured default.
+      required: false
+      example: "ai_task.anthropic_claude"
+      selector:
+        text:
 
 stop:
   name: Stop AI Playlist
