@@ -1,0 +1,87 @@
+# Mood-based playlists for AI Playlist import
+#
+# Import via: Settings > Integrations > AI Playlist > Configure > Import playlists from YAML
+
+- name: Upbeat & Energetic
+  prompt: Generate a playlist of upbeat and energetic songs from artists such as Queen, Journey, Foreigner, Bon Jovi, Huey
+    Lewis And The News, The Bangles, Cheap Trick, The Police, Billy Idol, Blondie. Include similar songs and artists that
+    fit this style. Choose songs mostly from the late 1970s through early 1990s, but it's OK to have a few from other eras.
+  tags:
+  - mood
+  - rock
+  exclude_live: true
+- name: Chill & Relaxed
+  prompt: Generate a playlist of chill and relaxed songs from artists such as Norah Jones, Jack Johnson, Iron & Wine, Sarah
+    McLachlan, Ingrid Michaelson, Sade, Zero 7, José González. Include similar songs and artists that fit this style.
+  tags:
+  - mood
+  - folk
+  exclude_live: true
+- name: Melancholy & Reflective
+  prompt: Generate a playlist of melancholy and reflective songs from artists such as Neil Young, Joni Mitchell, Damien Rice,
+    Cat Stevens, Bob Dylan, Radiohead, Nick Drake, Elliott Smith, Jeff Buckley. Include similar songs and artists that fit
+    this style. Weight heavily toward the 1960s through 1980s, with some newer selections mixed in.
+  tags:
+  - mood
+  - folk
+  - rock
+  exclude_live: true
+- name: Romantic & Intimate
+  prompt: Generate a playlist of romantic and intimate songs from artists such as Paul Simon, James Taylor, Carole King, Diana
+    Krall, Madeleine Peyroux, Eva Cassidy, Michael Bublé, Katie Melua. Include similar songs and artists that fit this style.
+  tags:
+  - mood
+  - jazz
+  - folk
+  exclude_live: true
+- name: Optimistic & Feel-Good
+  prompt: Generate a playlist of optimistic and feel-good songs from artists such as Hall & Oates, The Beach Boys, The Lovin'
+    Spoonful, The Monkees, The Association, Elton John, Billy Joel, Van Morrison. Include similar songs and artists that fit
+    this style. Weight heavily toward the 1960s through 1980s, with some newer selections mixed in.
+  tags:
+  - mood
+  - pop
+  - rock
+  exclude_live: true
+- name: Dark & Atmospheric
+  prompt: Generate a playlist of dark and atmospheric songs from artists such as Pink Floyd, The Cure, Smashing Pumpkins,
+    Radiohead, David Bowie, Joy Division, Bauhaus, Nine Inch Nails. Include similar songs and artists that fit this style.
+    Weight heavily toward the 1970s and 1980s, with some newer selections mixed in.
+  tags:
+  - mood
+  - rock
+  exclude_live: true
+- name: Focused & Productive
+  prompt: Generate a playlist of focused and productive songs from artists such as Pat Metheny Group, Dave Brubeck, Chris
+    Botti, Weather Report, Brian Eno, Philip Glass, Tortoise. Include similar songs and artists that fit this style.
+  tags:
+  - mood
+  - jazz
+  - electronic
+  exclude_live: true
+- name: Soulful & Heartfelt
+  prompt: Generate a playlist of soulful and heartfelt songs from artists such as Marvin Gaye, Stevie Wonder, Aretha Franklin,
+    Al Green, Otis Redding, Bill Withers, Sam Cooke, Etta James. Include similar songs and artists that fit this style. Weight
+    heavily toward the 1960s through 1980s, with some newer selections mixed in.
+  tags:
+  - mood
+  - soul
+  exclude_live: true
+- name: Dreamy & Ethereal
+  prompt: Generate a playlist of dreamy and ethereal songs from artists such as Enya, Roxy Music, Supertramp, Tears For Fears,
+    Norah Jones, Cocteau Twins, Mazzy Star, Sigur Rós. Include similar songs and artists that fit this style.
+  tags:
+  - mood
+  - electronic
+  - rock
+  exclude_live: true
+- name: Playful & Quirky
+  prompt: Generate a playlist of playful and quirky songs from artists such as They Might Be Giants, Dexy's Midnight Runners,
+    Owl City, Fitz and The Tantrums, Barenaked Ladies, Ben Folds, Cake, The B-52's, Devo, Fountains of Wayne, Presidents of
+    the United States of America, Harvey Danger, Violent Femmes, The Flaming Lips, OK Go, Weezer, Belle and Sebastian. Include
+    similar songs and artists that fit this style.
+  tags:
+  - mood
+  - rock
+  - pop
+  exclude_live: true

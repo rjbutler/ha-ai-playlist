@@ -1,0 +1,150 @@
+play:
+  name: Play AI Playlist
+  description: Start an AI-generated playlist on a media player. If no playlist or prompt is specified, plays the currently selected playlist (set via ai_playlist.select).
+  fields:
+    playlist:
+      name: Playlist
+      description: Name of a configured playlist. Optional if a playlist has been selected via ai_playlist.select.
+      example: "Classic Rock 60s-80s"
+      selector:
+        text:
+    prompt:
+      name: Prompt
+      description: Ad-hoc prompt (used if no playlist specified).
+      example: "Upbeat jazz fusion"
+      selector:
+        text:
+          multiline: true
+    entity_id:
+      name: Media Player
+      description: The media player entity to play on.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    track_count:
+      name: Track Count
+      description: Number of tracks to generate.
+      default: 10
+      selector:
+        number:
+          min: 3
+          max: 50
+    clear_queue:
+      name: Clear Queue
+      description: Clear existing queue before playing.
+      default: true
+      selector:
+        boolean:
+    collection:
+      name: Collection
+      description: Name of the collection this playlist was selected from (for state tracking)
+      required: false
+      selector:
+        text:
+    ai_entity:
+      name: AI Task Entity
+      description: Override the configured AI Task entity for this session (applies to initial generation and refills). If omitted, the entity configured during setup is used. Note — the override is not persisted across HA restarts; resurrected sessions fall back to the configured default.
+      required: false
+      selector:
+        entity:
+          domain: ai_task
+
+stop:
+  name: Stop AI Playlist
+  description: Stop managing a media player. Saves unplayed tracks to cache.
+  fields:
+    entity_id:
+      name: Media Player
+      description: The media player entity to stop managing.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+
+clear_history:
+  name: Clear Playlist History
+  description: Reset track history for a playlist.
+  fields:
+    playlist:
+      name: Playlist
+      description: Name of the playlist to clear history for.
+      required: true
+      selector:
+        text:
+
+list_playlists:
+  name: List Playlists
+  description: Returns all configured playlists with metadata. Optionally filter by tag.
+  fields:
+    tag:
+      name: Tag
+      description: Optional tag to filter playlists by (single tag).
+      selector:
+        text:
+    tags:
+      name: Tags
+      description: Filter to playlists matching ALL specified tags
+      required: false
+      selector:
+        object:
+
+select:
+  name: Select Playlist
+  description: Set the "up next" playlist for a media player without starting playback. The next call to ai_playlist.play (without a playlist argument) will play this selection.
+  fields:
+    entity_id:
+      name: Media Player
+      description: The media player entity to set selection for.
+      required: true
+      selector:
+        entity:
+          domain: media_player
+    playlist:
+      name: Playlist
+      description: Name of the playlist to select.
+      required: true
+      selector:
+        text:
+    collection:
+      name: Collection
+      description: Name of the collection this playlist belongs to.
+      required: false
+      selector:
+        text:
+
+generate:
+  name: Generate AI Playlist
+  description: Generate a track list using the AI pipeline and return it as service response data. Does not enqueue anything to a media player. Reads the playlist's track history for dedup but does not write to it.
+  fields:
+    playlist:
+      name: Playlist
+      description: Name of a configured playlist. One of 'playlist' or 'prompt' is required.
+      required: false
+      example: "Classic Rock 60s-80s"
+      selector:
+        text:
+    prompt:
+      name: Prompt
+      description: Ad-hoc prompt. One of 'playlist' or 'prompt' is required.
+      required: false
+      example: "Upbeat jazz fusion"
+      selector:
+        text:
+          multiline: true
+    track_count:
+      name: Track Count
+      description: Number of tracks to generate. Overrides the playlist's configured track_count if specified.
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 3
+          max: 50
+    ai_entity:
+      name: AI Task Entity
+      description: Override the configured AI Task entity. If omitted, the entity configured during setup is used.
+      required: false
+      selector:
+        entity:
+          domain: ai_task

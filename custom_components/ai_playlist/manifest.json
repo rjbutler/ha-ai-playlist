@@ -1,0 +1,14 @@
+{
+  "domain": "ai_playlist",
+  "name": "AI Playlist",
+  "codeowners": ["@rjbutler"],
+  "config_flow": true,
+  "dependencies": ["ai_task"],
+  "after_dependencies": ["music_assistant"],
+  "documentation": "https://github.com/rjbutler/ha-ai-playlist",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/rjbutler/ha-ai-playlist/issues",
+  "loggers": ["custom_components.ai_playlist"],
+  "requirements": [],
+  "version": "0.5.0b0"
+}

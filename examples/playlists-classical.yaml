@@ -1,0 +1,58 @@
+# Classical music playlists for AI Playlist import
+#
+# Import via: Settings > Integrations > AI Playlist > Configure > Import playlists from YAML
+
+- name: Early Music Instrumental
+  prompt: Generate a playlist of early music instrumental works from composers such as Guillaume de Machaut, John Dowland,
+    William Byrd, Heinrich Schütz, Michael Praetorius, Giovanni Gabrieli. Include similar works and composers that fit this
+    style. NO VOCALS. 
+  tags:
+  - classical
+  
+- name: Baroque Instrumental
+  prompt: Generate a playlist of baroque instrumental works from composers such as Johann Sebastian Bach, George Frideric
+    Handel, Antonio Vivaldi, Arcangelo Corelli, Domenico Scarlatti. Include similar works and composers that fit this style.
+    NO VOCALS. 
+  tags:
+  - classical
+  
+- name: Classical Era Symphonies & Concertos
+  prompt: Generate a playlist of classical era symphonies and concertos from composers such as Wolfgang Amadeus Mozart, Joseph
+    Haydn, Ludwig van Beethoven (early), Carl Philipp Emanuel Bach. Include similar works and composers that fit this style.   
+  tags:
+  - classical
+  
+- name: Romantic Era Masterworks
+  prompt: Generate a playlist of romantic era instrumental works from composers such as Ludwig van Beethoven (middle and late),
+    Johannes Brahms, Pyotr Ilyich Tchaikovsky, Franz Liszt, Felix Mendelssohn, Antonín Dvořák. Include similar works and composers
+    that fit this style. 
+  tags:
+  - classical
+  
+- name: Impressionist & Early 20th Century
+  prompt: Generate a playlist of impressionist and early 20th century instrumental works from composers such as Claude Debussy,
+    Maurice Ravel, Erik Satie, Igor Stravinsky, Sergei Prokofiev. Include similar works and composers that fit this style.
+    
+  tags:
+  - classical
+  
+- name: Modern & Contemporary Classical
+  prompt: Generate a playlist of modern and contemporary instrumental works from composers such as Philip Glass, Steve Reich,
+    John Adams, Arvo Pärt, Henryk Górecki. Include similar works and composers that fit this style. 
+  tags:
+  - classical
+  
+- name: Piano & Keyboard Works
+  prompt: Generate a playlist of instrumental piano and keyboard works from composers such as Frédéric Chopin, Franz Schubert,
+    Robert Schumann, Sergei Rachmaninoff, Claude Debussy, Ludwig van Beethoven. Include similar works and composers that fit
+    this style. 
+  tags:
+  - classical
+  
+- name: Chamber & String Ensemble
+  prompt: Generate a playlist of chamber and string ensemble works from composers such as Franz Schubert, Johannes Brahms,
+    Joseph Haydn, Wolfgang Amadeus Mozart, Dmitri Shostakovich, Antonín Dvořák. Include similar works and composers that fit
+    this style.
+  tags:
+  - classical
+  

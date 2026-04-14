@@ -1,0 +1,127 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "AI Playlist Setup",
+        "description": "Select the AI Task entity to use for generating playlists.",
+        "data": {
+          "ai_entity": "AI Task Entity"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure AI Playlist",
+        "description": "Change the AI Task entity used for generating playlists.",
+        "data": {
+          "ai_entity": "AI Task Entity"
+        }
+      }
+    },
+    "error": {
+      "no_ai_entity": "Please select an AI Task entity."
+    },
+    "abort": {
+      "reconfigure_successful": "AI Task entity updated successfully."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AI Playlist Configuration",
+        "menu_options": {
+          "add_playlist": "Add playlist",
+          "edit_playlist": "Edit playlist",
+          "delete_playlist": "Delete playlist",
+          "import_playlists": "Import playlists from YAML",
+          "add_collection": "Add collection",
+          "edit_collection": "Edit collection",
+          "delete_collection": "Delete collection",
+          "edit_system_prompt": "Edit system prompt"
+        }
+      },
+      "add_playlist": {
+        "title": "Add Playlist",
+        "data": {
+          "name": "Playlist name",
+          "prompt": "AI prompt",
+          "tags": "Tags (comma-separated, used by collections)",
+          "track_count": "Tracks per generation",
+          "history_depth": "History depth (tracks remembered)",
+          "refill_threshold": "Refill when fewer than N tracks remain",
+          "exclude_live": "Exclude live recordings"
+        }
+      },
+      "edit_playlist": {
+        "title": "Select Playlist to Edit",
+        "data": {
+          "playlist": "Playlist"
+        }
+      },
+      "edit_playlist_form": {
+        "title": "Edit Playlist",
+        "data": {
+          "name": "Playlist name",
+          "prompt": "AI prompt",
+          "tags": "Tags (comma-separated, used by collections)",
+          "track_count": "Tracks per generation",
+          "history_depth": "History depth (tracks remembered)",
+          "refill_threshold": "Refill when fewer than N tracks remain",
+          "exclude_live": "Exclude live recordings"
+        }
+      },
+      "delete_playlist": {
+        "title": "Delete Playlist",
+        "data": {
+          "playlist": "Playlist to delete"
+        }
+      },
+      "import_playlists": {
+        "title": "Import Playlists",
+        "description": "Paste YAML with playlist definitions. Each entry needs 'name' and 'prompt'. Optional: tags (list), track_count, history_depth, refill_threshold, exclude_live.",
+        "data": {
+          "yaml_data": "YAML data"
+        }
+      },
+      "add_collection": {
+        "title": "Add Collection",
+        "description": "Create a select entity backed by a tag query. Tags: {tag_hint}",
+        "data": {
+          "name": "Collection Name",
+          "tags": "Tags (comma-separated)"
+        }
+      },
+      "edit_collection": {
+        "title": "Edit Collection",
+        "data": {
+          "collection_index": "Select collection to edit"
+        }
+      },
+      "edit_collection_form": {
+        "title": "Edit Collection",
+        "data": {
+          "name": "Collection Name",
+          "tags": "Tags (comma-separated)"
+        }
+      },
+      "delete_collection": {
+        "title": "Delete Collection",
+        "data": {
+          "collection_index": "Select collection to delete"
+        }
+      },
+      "edit_system_prompt": {
+        "title": "Edit System Prompt",
+        "description": "Customize the instructions sent to the AI when generating tracks. The default prompt requests JSON ([{\"artist\": \"...\", \"title\": \"...\", \"album\": \"...\"}]). If the AI returns plain text, the parser falls back to one track per line as 'Artist - Title' or 'Artist - Title | Album'.",
+        "data": {
+          "system_prompt": "System Prompt"
+        }
+      }
+    },
+    "error": {
+      "slug_collision": "This name conflicts with an existing playlist after slugification (different punctuation/spacing produces the same internal slug). Pick a more distinct name."
+    },
+    "abort": {
+      "no_playlists": "No playlists configured yet. Add a playlist first.",
+      "no_collections": "No collections configured"
+    }
+  }
+}
