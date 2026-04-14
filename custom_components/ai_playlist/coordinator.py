@@ -302,76 +302,28 @@ class PlaylistCoordinator:
         self, track_count: int, clear_first: bool
     ) -> None:
         """Generate tracks via AI and enqueue them."""
+        from homeassistant.exceptions import HomeAssistantError
+
         self.state = STATE_GENERATING
 
         history = await self.hass.async_add_executor_job(
             self.store.get_history, self.playlist_name
         )
-        prompt = self._build_user_prompt(history=history, enqueued=self.enqueued_tracks)
 
         try:
-            response = await self.hass.services.async_call(
-                "ai_task",
-                "generate_data",
-                {
-                    "task_name": "ai_playlist_generate",
-                    "instructions": f"{self.system_prompt}\n\n{prompt}",
-                    "entity_id": self.ai_entity_id,
-                },
-                blocking=True,
-                return_response=True,
+            valid_dicts = await generate_tracks(
+                hass=self.hass,
+                ai_entity_id=self.ai_entity_id,
+                system_prompt=self.system_prompt,
+                playlist_config=self.playlist_config,
+                history=history,
+                enqueued=self.enqueued_tracks,
+                track_count=track_count,
             )
-        except Exception:
-            _LOGGER.exception("AI generation failed for '%s'", self.playlist_name)
+        except HomeAssistantError:
             self.state = STATE_ERROR
             return
 
-        raw_text = ""
-        if isinstance(response, dict):
-            raw_text = response.get("data", "")
-        elif hasattr(response, "data"):
-            raw_text = response.data or ""
-
-        parsed = parse_ai_response(raw_text)
-        if not parsed:
-            _LOGGER.warning("AI returned no parseable tracks for '%s'", self.playlist_name)
-            self.state = STATE_ERROR
-            return
-
-        # Convert dicts to strings for dedup, keep mapping to recover dicts
-        track_strings = [track_dict_to_string(t) for t in parsed]
-        string_to_dict: dict[str, dict] = {}
-        for t in parsed:
-            key = track_dict_to_string(t)
-            if key not in string_to_dict:
-                string_to_dict[key] = t
-
-        filtered = filter_tracks(
-            track_strings,
-            history=history,
-            enqueued=self.enqueued_tracks,
-            exclude_live=self.exclude_live,
-        )
-
-        valid_strings = filtered["valid"]
-        if not valid_strings:
-            _LOGGER.warning(
-                "All %d tracks filtered as duplicates for '%s'",
-                len(parsed),
-                self.playlist_name,
-            )
-            self.state = STATE_ERROR
-            return
-
-        _LOGGER.info(
-            "Generated %d valid tracks for '%s' (%d filtered)",
-            len(valid_strings),
-            self.playlist_name,
-            len(filtered["duplicates"]),
-        )
-
-        # Map valid strings back to dicts for enqueue
-        valid_dicts = [string_to_dict[s] for s in valid_strings]
         await self._enqueue_tracks(valid_dicts, clear_first=clear_first)
 
     async def _enqueue_tracks(self, tracks: list[dict], clear_first: bool) -> None:
