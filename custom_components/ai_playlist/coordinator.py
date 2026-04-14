@@ -13,6 +13,7 @@ from .const import (
     DEFAULT_REFILL_THRESHOLD,
     DEFAULT_TRACK_COUNT,
     DOMAIN,
+    EXCLUDE_LIVE_DIRECTIVE,
     STATE_ENQUEUING,
     STATE_ERROR,
     STATE_GENERATING,
@@ -63,13 +64,17 @@ async def generate_tracks(
         parts.append("\nDo not include any of these tracks:\n" + "\n".join(exclusion))
     user_prompt = "\n".join(parts)
 
+    effective_system_prompt = system_prompt
+    if exclude_live:
+        effective_system_prompt += f"\n\n{EXCLUDE_LIVE_DIRECTIVE}"
+
     try:
         response = await hass.services.async_call(
             "ai_task",
             "generate_data",
             {
                 "task_name": "ai_playlist_generate",
-                "instructions": f"{system_prompt}\n\n{user_prompt}",
+                "instructions": f"{effective_system_prompt}\n\n{user_prompt}",
                 "entity_id": ai_entity_id,
             },
             blocking=True,

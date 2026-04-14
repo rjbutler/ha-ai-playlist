@@ -57,3 +57,7 @@ Rules:
 4. DIVERSITY: Mix across different artists. No more than 2 tracks per artist.
 5. ORDERING: Vary the energy and mood — don't front-load or cluster similar tracks.
 6. OUTPUT ONLY: Return only the JSON array. No commentary, numbering, or explanations."""
+
+EXCLUDE_LIVE_DIRECTIVE: Final = (
+    "Select original studio recordings only, no live versions or live albums."
+)
