@@ -34,6 +34,90 @@ from .track_processing import (
 _LOGGER = logging.getLogger(__name__)
 
 
+async def generate_tracks(
+    hass: HomeAssistant,
+    ai_entity_id: str,
+    system_prompt: str,
+    playlist_config: dict,
+    history: list[str],
+    enqueued: list[str],
+    track_count: int,
+) -> list[dict]:
+    """Call the AI task entity, parse the response, and return filtered tracks.
+
+    Pure query — no side effects on coordinator state, history, or queues.
+    Raises HomeAssistantError on AI failure, unparseable response, or if all
+    tracks are filtered out as duplicates.
+
+    Returns: list of {"artist": str, "title": str, "album": str} dicts.
+    """
+    from homeassistant.exceptions import HomeAssistantError
+
+    playlist_name = playlist_config.get("name", "")
+    exclude_live = playlist_config.get("exclude_live", False)
+
+    # Build user prompt (same structure as _build_user_prompt)
+    parts = [playlist_config.get("prompt", ""), f"\nGenerate {track_count} tracks."]
+    exclusion = [*history, *enqueued]
+    if exclusion:
+        parts.append("\nDo not include any of these tracks:\n" + "\n".join(exclusion))
+    user_prompt = "\n".join(parts)
+
+    try:
+        response = await hass.services.async_call(
+            "ai_task",
+            "generate_data",
+            {
+                "task_name": "ai_playlist_generate",
+                "instructions": f"{system_prompt}\n\n{user_prompt}",
+                "entity_id": ai_entity_id,
+            },
+            blocking=True,
+            return_response=True,
+        )
+    except Exception as err:
+        _LOGGER.exception("AI generation failed for '%s'", playlist_name)
+        raise HomeAssistantError(f"AI generation failed: {err}") from err
+
+    raw_text = ""
+    if isinstance(response, dict):
+        raw_text = response.get("data", "")
+    elif hasattr(response, "data"):
+        raw_text = response.data or ""
+
+    parsed = parse_ai_response(raw_text)
+    if not parsed:
+        raise HomeAssistantError(
+            f"AI returned no parseable tracks for '{playlist_name}'"
+        )
+
+    # Map filtered strings back to dicts
+    string_to_dict: dict[str, dict] = {}
+    for t in parsed:
+        key = track_dict_to_string(t)
+        if key not in string_to_dict:
+            string_to_dict[key] = t
+
+    filtered = filter_tracks(
+        [track_dict_to_string(t) for t in parsed],
+        history=history,
+        enqueued=enqueued,
+        exclude_live=exclude_live,
+    )
+
+    valid = [string_to_dict[s] for s in filtered["valid"]]
+    if not valid:
+        raise HomeAssistantError(
+            f"All {len(parsed)} tracks filtered as duplicates for '{playlist_name}'"
+        )
+
+    _LOGGER.info(
+        "generate_tracks: %d valid, %d filtered for '%s'",
+        len(valid), len(filtered["duplicates"]), playlist_name,
+    )
+    return valid
+
+
 class PlaylistCoordinator:
     """Manages one active AI playlist session on a single media player."""
 
