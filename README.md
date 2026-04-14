@@ -18,7 +18,7 @@ Full disclosure, although this was originally a set of scripts, automations and 
 
 1. Open HACS in Home Assistant
 2. Click the three-dot menu (top right) → **Custom repositories**
-3. Add repository URL: `https://gitea.northridgetech.com/rjbutler/ha-ai-playlist`
+3. Add repository URL: `https://github.com/rjbutler/ha-ai-playlist`
 4. Category: **Integration**
 5. Click **Add**, then find "AI Playlist" in HACS and click **Download**
 6. Restart Home Assistant

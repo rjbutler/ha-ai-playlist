@@ -5,9 +5,9 @@
   "config_flow": true,
   "dependencies": ["ai_task"],
   "after_dependencies": ["music_assistant"],
-  "documentation": "https://gitea.northridgetech.com/rjbutler/ha-ai-playlist",
+  "documentation": "https://github.com/rjbutler/ha-ai-playlist",
   "iot_class": "local_push",
-  "issue_tracker": "https://gitea.northridgetech.com/rjbutler/ha-ai-playlist/issues",
+  "issue_tracker": "https://github.com/rjbutler/ha-ai-playlist/issues",
   "loggers": ["custom_components.ai_playlist"],
   "requirements": [],
   "version": "0.5.0b0"
