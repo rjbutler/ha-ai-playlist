@@ -116,6 +116,7 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                 "add_playlist",
                 "edit_playlist",
                 "delete_playlist",
+                "view_playlists",
                 "import_playlists",
                 "add_collection",
                 "edit_collection",
@@ -293,10 +294,17 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
         """Import playlists from YAML."""
         if user_input is not None:
             store = self.hass.data[DOMAIN]["store"]
-            count = await store.async_import_playlists(user_input["yaml_data"])
-            _LOGGER.info("Imported %d playlists", count)
+            imported, skipped = await store.async_import_playlists(user_input["yaml_data"])
+            _LOGGER.info("Imported %d playlists (skipped %d)", imported, skipped)
             await self._refresh_select_entities()
-            return self.async_create_entry(title="", data=dict(self.config_entry.options))
+            reason = "import_complete" if imported or skipped else "import_empty"
+            return self.async_abort(
+                reason=reason,
+                description_placeholders={
+                    "count": str(imported),
+                    "skipped": str(skipped),
+                },
+            )
 
         return self.async_show_form(
             step_id="import_playlists",
@@ -307,6 +315,34 @@ class AiPlaylistOptionsFlow(config_entries.OptionsFlow):
                     ),
                 }
             ),
+        )
+
+    async def async_step_view_playlists(self, user_input=None):
+        """Show a read-only list of all managed playlists."""
+        store = self.hass.data[DOMAIN]["store"]
+        playlists = store.get_all_playlists()
+
+        if not playlists:
+            return self.async_abort(reason="no_playlists")
+
+        if user_input is not None:
+            return await self.async_step_init()
+
+        lines = []
+        for cfg in sorted(playlists.values(), key=lambda c: c.get("name", "").lower()):
+            name = cfg.get("name", "")
+            tags = cfg.get("tags", []) or []
+            tag_str = f" [{', '.join(tags)}]" if tags else ""
+            lines.append(f"- **{name}**{tag_str}")
+        listing = "\n".join(lines)
+
+        return self.async_show_form(
+            step_id="view_playlists",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "count": str(len(playlists)),
+                "playlists": listing,
+            },
         )
 
     async def async_step_add_collection(self, user_input=None):

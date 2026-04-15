@@ -31,6 +31,7 @@
           "add_playlist": "Add playlist",
           "edit_playlist": "Edit playlist",
           "delete_playlist": "Delete playlist",
+          "view_playlists": "View playlists",
           "import_playlists": "Import playlists from YAML",
           "add_collection": "Add collection",
           "edit_collection": "Edit collection",
@@ -81,6 +82,10 @@
           "yaml_data": "YAML data"
         }
       },
+      "view_playlists": {
+        "title": "Managed Playlists ({count})",
+        "description": "{playlists}"
+      },
       "add_collection": {
         "title": "Add Collection",
         "description": "Create a select entity backed by a tag query. Tags: {tag_hint}",
@@ -121,7 +126,9 @@
     },
     "abort": {
       "no_playlists": "No playlists configured yet. Add a playlist first.",
-      "no_collections": "No collections configured"
+      "no_collections": "No collections configured",
+      "import_complete": "Imported {count} playlists (skipped {skipped}).",
+      "import_empty": "No playlists imported. Check that the YAML is a list of entries with 'name' and 'prompt' fields; see Home Assistant logs for parse errors."
     }
   }
 }
