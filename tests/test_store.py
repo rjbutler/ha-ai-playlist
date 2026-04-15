@@ -234,20 +234,23 @@ class TestYamlImport:
 - name: Jazz Evening
   prompt: Smooth jazz
 """
-        count = await tmp_store.async_import_playlists(yaml_text)
-        assert count == 2
+        imported, skipped = await tmp_store.async_import_playlists(yaml_text)
+        assert imported == 2
+        assert skipped == 0
         assert tmp_store.get_playlist("Rock Mix") is not None
         assert tmp_store.get_playlist("Jazz Evening") is not None
 
     @pytest.mark.asyncio
     async def test_import_invalid_yaml(self, tmp_store):
-        count = await tmp_store.async_import_playlists("{{invalid yaml")
-        assert count == 0
+        imported, skipped = await tmp_store.async_import_playlists("{{invalid yaml")
+        assert imported == 0
+        assert skipped == 0
 
     @pytest.mark.asyncio
     async def test_import_not_list(self, tmp_store):
-        count = await tmp_store.async_import_playlists("just a string")
-        assert count == 0
+        imported, skipped = await tmp_store.async_import_playlists("just a string")
+        assert imported == 0
+        assert skipped == 0
 
     @pytest.mark.asyncio
     async def test_import_skips_incomplete(self, tmp_store):
@@ -257,8 +260,9 @@ class TestYamlImport:
 - name: Missing Prompt
 - prompt: Missing Name
 """
-        count = await tmp_store.async_import_playlists(yaml_text)
-        assert count == 1
+        imported, skipped = await tmp_store.async_import_playlists(yaml_text)
+        assert imported == 1
+        assert skipped == 2
 
 
 # ── Session persistence ──────────────────────────────────────────

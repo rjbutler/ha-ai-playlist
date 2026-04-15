@@ -132,30 +132,37 @@ class PlaylistStore:
         self._playlists.pop(slug, None)
         await self._async_save()
 
-    async def async_import_playlists(self, yaml_text: str) -> int:
-        """Import playlists from YAML text. Returns count imported."""
+    async def async_import_playlists(self, yaml_text: str) -> tuple[int, int]:
+        """Import playlists from YAML text. Returns (imported, skipped)."""
         import yaml
 
         try:
             items = yaml.safe_load(yaml_text)
-        except yaml.YAMLError:
-            return 0
+        except yaml.YAMLError as err:
+            _LOGGER.warning("YAML parse error during playlist import: %s", err)
+            return 0, 0
 
         if not isinstance(items, list):
-            return 0
+            _LOGGER.warning(
+                "Playlist import expected a YAML list, got %s", type(items).__name__
+            )
+            return 0, 0
 
-        count = 0
+        imported = 0
+        skipped = 0
         for item in items:
             if not isinstance(item, dict) or "name" not in item or "prompt" not in item:
+                skipped += 1
                 continue
             try:
                 await self.async_save_playlist(item["name"], item)
             except ValueError as err:
                 _LOGGER.warning("Skipping playlist import: %s", err)
+                skipped += 1
                 continue
-            count += 1
+            imported += 1
 
-        return count
+        return imported, skipped
 
     # --- Track history ---
 
