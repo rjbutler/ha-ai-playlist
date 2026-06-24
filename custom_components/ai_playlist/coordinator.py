@@ -321,9 +321,19 @@ class PlaylistCoordinator:
                     since_internal_clear,
                 )
                 return
+            # DIAGNOSTIC INSTRUMENTATION: cross-check the items=0 queue event
+            # against a live get_queue read. If the live read shows items>0,
+            # the detach was driven by a transient/spurious event rather than a
+            # genuine drain. Remove once root cause is confirmed.
+            live_items, live_index = await self._check_queue_depth()
             _LOGGER.info(
-                "Detaching from %s — queue cleared to 0 (queue event)",
+                "Detaching from %s — queue cleared to 0 (queue event); "
+                "live get_queue at detach: items=%s current_index=%s "
+                "enqueued_tracks=%d",
                 self.entity_id,
+                live_items,
+                live_index,
+                len(self.enqueued_tracks),
             )
             await self._detach()
 
@@ -481,8 +491,35 @@ class PlaylistCoordinator:
         if self._generating or not self.enqueued_tracks:
             return
         queue_items, current_index = await self._check_queue_depth()
-        if player_state == "playing" and queue_items > 0 and current_index >= 0:
-            items_after = queue_items - current_index - 1
+        gate_ok = queue_items > 0 and current_index >= 0
+        items_after = queue_items - current_index - 1 if gate_ok else None
+        # DIAGNOSTIC INSTRUMENTATION (see ha-ai-playlist issue: queue drained
+        # to 0 without refill firing). Logs the queue numbers and the exact
+        # skip reason as the queue drains. Remove once root cause is confirmed.
+        if not gate_ok:
+            _LOGGER.info(
+                "Refill gate skipped for %s: player_state=%s queue_items=%s "
+                "current_index=%s (queue read did not satisfy gate)",
+                self.entity_id,
+                player_state,
+                queue_items,
+                current_index,
+            )
+        elif items_after <= self.refill_threshold + 5:
+            _LOGGER.info(
+                "Refill check for %s: player_state=%s items=%s current_index=%s "
+                "items_after=%s threshold=%s decision=%s",
+                self.entity_id,
+                player_state,
+                queue_items,
+                current_index,
+                items_after,
+                self.refill_threshold,
+                "REFILL"
+                if (player_state == "playing" and items_after < self.refill_threshold)
+                else "skip",
+            )
+        if player_state == "playing" and gate_ok:
             if items_after < self.refill_threshold:
                 if self._generating:
                     return
