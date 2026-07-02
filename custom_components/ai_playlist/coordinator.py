@@ -27,7 +27,9 @@ from .sensor import get_sensor
 from .store import PlaylistStore
 from .track_processing import (
     filter_tracks,
+    merge_track_lists,
     parse_ai_response,
+    queue_item_to_track_string,
     split_track,
     strip_album,
     track_dict_to_string,
@@ -447,6 +449,39 @@ class PlaylistCoordinator:
                 return (0, -1)
 
         return (items, current_index)
+
+    async def _get_live_queue_tracks(self) -> tuple[list[str], list[str]]:
+        """Read the live MA queue directly from the MA client.
+
+        Returns (played, upcoming): track strings before the current index,
+        and from the current index onward (including the in-flight track).
+        Returns ([], []) when the client, queue, or items are unavailable —
+        callers fall back to the unplayed cache.
+        """
+        mass = self._get_mass_client()
+        queue_id = self._queue_id or self._resolve_queue_id()
+        if not mass or not queue_id:
+            return ([], [])
+        try:
+            items = await mass.player_queues.get_queue_items(queue_id)
+            queue = mass.player_queues.get(queue_id)
+        except Exception:
+            _LOGGER.warning(
+                "Could not read MA queue items for %s — falling back to cache",
+                self.entity_id,
+            )
+            return ([], [])
+        current_index = getattr(queue, "current_index", None) if queue else None
+        if current_index is None:
+            current_index = 0
+        played: list[str] = []
+        upcoming: list[str] = []
+        for i, item in enumerate(items or []):
+            track = queue_item_to_track_string(item)
+            if not track:
+                continue
+            (played if i < current_index else upcoming).append(track)
+        return (played, upcoming)
 
     @callback
     def _on_state_change(self, event: Event) -> None:
