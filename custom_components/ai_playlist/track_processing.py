@@ -79,6 +79,40 @@ def track_dict_to_string(track: dict) -> str:
     return base
 
 
+def queue_item_to_track_string(item) -> str:
+    """Convert an MA QueueItem (duck-typed) to 'Artist - Title' format.
+
+    Prefers media_item.artists[0].name + media_item.name; falls back to the
+    queue item's display name. Returns '' if no usable name can be built.
+    """
+    media_item = getattr(item, "media_item", None)
+    if media_item is not None:
+        artists = getattr(media_item, "artists", None) or []
+        title = getattr(media_item, "name", "") or ""
+        if artists and title:
+            artist = getattr(artists[0], "name", "") or ""
+            if artist:
+                return f"{artist} - {title}"
+    return getattr(item, "name", "") or ""
+
+
+def merge_track_lists(base: list[str], extra: list[str]) -> list[str]:
+    """Order-preserving union of two track lists, deduped by normalize_track.
+
+    Entries from `base` win over normalized duplicates in `extra`.
+    Entries that normalize to '' are dropped.
+    """
+    merged: list[str] = []
+    seen: set[str] = set()
+    for track in [*base, *extra]:
+        norm = normalize_track(track)
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        merged.append(track)
+    return merged
+
+
 def split_track(track: str) -> tuple[str, str]:
     """Split a track string into (artist, title). Strips album first."""
     if not track:

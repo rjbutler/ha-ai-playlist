@@ -3,9 +3,11 @@ import pytest
 
 from custom_components.ai_playlist.track_processing import (
     filter_tracks,
+    merge_track_lists,
     normalize_track,
     parse_ai_response,
     parse_json_tracks,
+    queue_item_to_track_string,
     split_track,
     strip_album,
     track_dict_to_string,
@@ -520,3 +522,54 @@ class TestFilterTracks:
         result = filter_tracks(tracks, history=[], enqueued=[])
         assert len(result["valid"]) == 1
         assert result["duplicates"][0]["reason"] == "duplicate_title_in_response"
+
+
+# ── Queue reconciliation helpers ─────────────────────────────────
+
+
+class TestQueueItemToTrackString:
+    def _item(self, artist=None, title=None, display_name=""):
+        """Duck-typed stand-in for an MA QueueItem."""
+        from types import SimpleNamespace
+
+        media_item = None
+        if artist is not None or title is not None:
+            artists = [SimpleNamespace(name=artist)] if artist else []
+            media_item = SimpleNamespace(artists=artists, name=title or "")
+        return SimpleNamespace(media_item=media_item, name=display_name)
+
+    def test_uses_media_item_artist_and_title(self):
+        item = self._item(artist="Jackson Browne", title="Running on Empty")
+        assert queue_item_to_track_string(item) == "Jackson Browne - Running on Empty"
+
+    def test_falls_back_to_display_name_without_media_item(self):
+        item = self._item(display_name="Damien Rice - The Blower's Daughter")
+        assert queue_item_to_track_string(item) == "Damien Rice - The Blower's Daughter"
+
+    def test_falls_back_to_display_name_when_artists_empty(self):
+        item = self._item(artist=None, title="Orphan Title", display_name="X - Orphan Title")
+        assert queue_item_to_track_string(item) == "X - Orphan Title"
+
+    def test_returns_empty_string_when_nothing_usable(self):
+        item = self._item()
+        assert queue_item_to_track_string(item) == ""
+
+
+class TestMergeTrackLists:
+    def test_union_preserves_order_base_first(self):
+        merged = merge_track_lists(["A - 1", "B - 2"], ["C - 3"])
+        assert merged == ["A - 1", "B - 2", "C - 3"]
+
+    def test_dedups_by_normalized_form(self):
+        # Same track, different case + remaster suffix → one entry, base wins
+        merged = merge_track_lists(
+            ["Jackson Browne - Running on Empty"],
+            ["jackson browne - running on empty (remastered)"],
+        )
+        assert merged == ["Jackson Browne - Running on Empty"]
+
+    def test_drops_unnormalizable_entries(self):
+        assert merge_track_lists(["", "A - 1"], [""]) == ["A - 1"]
+
+    def test_both_empty(self):
+        assert merge_track_lists([], []) == []
