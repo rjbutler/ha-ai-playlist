@@ -7,6 +7,7 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import CONF_COLLECTIONS, CONF_COLLECTION_NAME, CONF_COLLECTION_TAGS, DOMAIN
 
@@ -32,7 +33,7 @@ async def async_setup_entry(
     hass.data[DOMAIN]["select_entities"] = entities
 
 
-class AiPlaylistCollectionSelect(SelectEntity):
+class AiPlaylistCollectionSelect(SelectEntity, RestoreEntity):
     """A select entity backed by a tag query against the playlist store."""
 
     _attr_has_entity_name = False
@@ -57,6 +58,13 @@ class AiPlaylistCollectionSelect(SelectEntity):
         """Query store for playlists matching all tags."""
         playlists = self._store.get_playlists_by_tags(self._tags)
         return sorted(p["name"] for p in playlists)
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the previously selected option across restarts."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state in self._attr_options:
+            self._attr_current_option = last_state.state
 
     async def async_select_option(self, option: str) -> None:
         """Handle user selecting an option."""

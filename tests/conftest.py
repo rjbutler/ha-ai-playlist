@@ -48,7 +48,11 @@ class _SelectEntity:
     pass
 
 class _RestoreEntity:
-    pass
+    async def async_added_to_hass(self):
+        pass
+
+    async def async_get_last_state(self):
+        return None
 
 _ha_modules["homeassistant.components.sensor"].SensorEntity = _SensorEntity
 _ha_modules["homeassistant.components.select"].SelectEntity = _SelectEntity
