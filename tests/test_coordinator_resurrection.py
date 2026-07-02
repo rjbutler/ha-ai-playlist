@@ -149,3 +149,63 @@ class TestResumeAfterRestart:
         await coord.async_resume_after_restart()
 
         assert coord.enqueued_tracks == ["Cached - Song"]
+
+
+def _playing_event():
+    state = MagicMock()
+    state.state = "playing"
+    state.attributes = {}
+    event = MagicMock()
+    event.data = {"new_state": state}
+    return event
+
+
+class TestRefillGuard:
+    def _prep(self, coord, queue_depth):
+        coord.state = "playing"
+        coord._last_queue_check = 0.0
+        coord._check_queue_depth = AsyncMock(return_value=queue_depth)
+        coord._refill = AsyncMock()
+
+    @pytest.mark.asyncio
+    async def test_refills_with_empty_enqueued_but_live_queue(self):
+        """The original bug: resurrected session with empty enqueued_tracks
+        and a draining live queue must still refill."""
+        coord = _make_coordinator({"name": "Test Playlist", "refill_threshold": 2})
+        self._prep(coord, queue_depth=(10, 8))  # items_after = 1 < 2
+        coord.enqueued_tracks = []
+
+        await coord._async_handle_state_change(_playing_event())
+
+        coord._refill.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_refill_without_enqueued_and_without_live_queue(self):
+        """Before the initial enqueue: nothing enqueued, no live queue → block."""
+        coord = _make_coordinator({"name": "Test Playlist", "refill_threshold": 2})
+        self._prep(coord, queue_depth=(0, -1))
+        coord.enqueued_tracks = []
+
+        await coord._async_handle_state_change(_playing_event())
+
+        coord._refill.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_refills_normally_with_enqueued_tracks(self):
+        coord = _make_coordinator({"name": "Test Playlist", "refill_threshold": 2})
+        self._prep(coord, queue_depth=(10, 8))
+        coord.enqueued_tracks = ["A - One"]
+
+        await coord._async_handle_state_change(_playing_event())
+
+        coord._refill.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_refill_above_threshold(self):
+        coord = _make_coordinator({"name": "Test Playlist", "refill_threshold": 2})
+        self._prep(coord, queue_depth=(10, 5))  # items_after = 4 >= 2
+        coord.enqueued_tracks = ["A - One"]
+
+        await coord._async_handle_state_change(_playing_event())
+
+        coord._refill.assert_not_awaited()

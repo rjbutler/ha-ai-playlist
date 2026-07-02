@@ -520,44 +520,28 @@ class PlaylistCoordinator:
             return
         self._last_queue_check = now
 
-        # Check if refill needed. Require enqueued_tracks to be non-empty —
-        # otherwise queue events arriving before the initial enqueue completes
-        # could trigger a spurious refill.
-        if self._generating or not self.enqueued_tracks:
+        # Check if refill is needed. Block only the window before the first
+        # enqueue completes: nothing enqueued by us AND no live queue. A
+        # resurrected session may have an empty enqueued_tracks (cache peek
+        # can be empty) but a live restored queue — it must still refill.
+        if self._generating:
             return
         queue_items, current_index = await self._check_queue_depth()
-        gate_ok = queue_items > 0 and current_index >= 0
-        items_after = queue_items - current_index - 1 if gate_ok else None
-        # DIAGNOSTIC INSTRUMENTATION (see ha-ai-playlist issue: queue drained
-        # to 0 without refill firing). Logs the queue numbers and the exact
-        # skip reason as the queue drains. Remove once root cause is confirmed.
-        if not gate_ok:
-            _LOGGER.info(
-                "Refill gate skipped for %s: player_state=%s queue_items=%s "
-                "current_index=%s (queue read did not satisfy gate)",
-                self.entity_id,
-                player_state,
-                queue_items,
-                current_index,
-            )
-        elif items_after <= self.refill_threshold + 5:
-            _LOGGER.info(
-                "Refill check for %s: player_state=%s items=%s current_index=%s "
-                "items_after=%s threshold=%s decision=%s",
-                self.entity_id,
-                player_state,
-                queue_items,
-                current_index,
-                items_after,
-                self.refill_threshold,
-                "REFILL"
-                if (player_state == "playing" and items_after < self.refill_threshold)
-                else "skip",
-            )
-        if player_state == "playing" and gate_ok:
+        has_live_queue = queue_items > 0 and current_index >= 0
+        if not self.enqueued_tracks and not has_live_queue:
+            return
+        if player_state == "playing" and has_live_queue:
+            items_after = queue_items - current_index - 1
             if items_after < self.refill_threshold:
-                if self._generating:
-                    return
+                _LOGGER.debug(
+                    "Refill triggered for %s: items=%s current_index=%s "
+                    "items_after=%s threshold=%s",
+                    self.entity_id,
+                    queue_items,
+                    current_index,
+                    items_after,
+                    self.refill_threshold,
+                )
                 self._generating = True
                 try:
                     await self._refill()
