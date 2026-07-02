@@ -622,14 +622,33 @@ class PlaylistCoordinator:
     async def async_resume_after_restart(self) -> None:
         """Attach to an already-playing MA queue after HA restart.
 
-        Skips track generation — just wires up listeners so refill and history
-        recording work as if the coordinator had been running all along.
+        Skips track generation — wires up listeners and reconciles
+        enqueued_tracks from the live restored MA queue (primary) plus the
+        unplayed cache (fallback), so refill and dedup work as if the
+        coordinator had been running all along.
         """
-        # Pre-populate enqueued_tracks from cache so refill exclusion works
         cached = await self.hass.async_add_executor_job(
             self.store.get_cache_peek, self.playlist_name
         )
-        self.enqueued_tracks = list(cached) if cached else []
+        played, upcoming = await self._get_live_queue_tracks()
+
+        # Tracks that finished while HA was down sit before current_index in
+        # the restored queue but never reached history — record them now
+        # (add_to_history dedupes, so re-recording already-known plays is safe).
+        for track in played:
+            await self.store.async_add_to_history(self.playlist_name, track)
+
+        self.enqueued_tracks = merge_track_lists(upcoming, list(cached or []))
+        _LOGGER.info(
+            "Resurrected '%s' on %s: enqueued_tracks=%d "
+            "(queue upcoming=%d, queue played=%d, cache peek=%d)",
+            self.playlist_name,
+            self.entity_id,
+            len(self.enqueued_tracks),
+            len(upcoming),
+            len(played),
+            len(cached or []),
+        )
 
         self.state = STATE_PLAYING
 

@@ -89,3 +89,57 @@ class TestGetLiveQueueTracks:
 
         assert played == []
         assert upcoming == ["A - One", "B - Two"]
+
+
+class TestResumeAfterRestart:
+    def _prep(self, coord, cache_peek, played, upcoming):
+        # get_cache_peek runs via executor job
+        coord.hass.async_add_executor_job = AsyncMock(return_value=cache_peek)
+        coord.store.async_add_to_history = AsyncMock()
+        coord._get_live_queue_tracks = AsyncMock(return_value=(played, upcoming))
+        coord._subscribe_to_queue_events = MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_seeds_enqueued_from_live_queue_and_cache(self):
+        coord = _make_coordinator()
+        self._prep(
+            coord,
+            cache_peek=["Cached - Song", "C - Three"],  # C - Three also in queue
+            played=["A - One"],
+            upcoming=["C - Three", "D - Four"],
+        )
+
+        await coord.async_resume_after_restart()
+
+        # Live queue first, cache extras appended, dup deduped
+        assert coord.enqueued_tracks == ["C - Three", "D - Four", "Cached - Song"]
+
+    @pytest.mark.asyncio
+    async def test_played_queue_items_recorded_to_history(self):
+        coord = _make_coordinator()
+        self._prep(coord, cache_peek=[], played=["A - One", "B - Two"], upcoming=[])
+
+        await coord.async_resume_after_restart()
+
+        recorded = [c.args for c in coord.store.async_add_to_history.await_args_list]
+        assert ("Test Playlist", "A - One") in recorded
+        assert ("Test Playlist", "B - Two") in recorded
+
+    @pytest.mark.asyncio
+    async def test_empty_cache_with_live_queue_still_seeds(self):
+        """The original bug: empty cache peek must no longer leave enqueued_tracks empty."""
+        coord = _make_coordinator()
+        self._prep(coord, cache_peek=[], played=[], upcoming=["C - Three", "D - Four"])
+
+        await coord.async_resume_after_restart()
+
+        assert coord.enqueued_tracks == ["C - Three", "D - Four"]
+
+    @pytest.mark.asyncio
+    async def test_queue_read_failure_falls_back_to_cache(self):
+        coord = _make_coordinator()
+        self._prep(coord, cache_peek=["Cached - Song"], played=[], upcoming=[])
+
+        await coord.async_resume_after_restart()
+
+        assert coord.enqueued_tracks == ["Cached - Song"]
