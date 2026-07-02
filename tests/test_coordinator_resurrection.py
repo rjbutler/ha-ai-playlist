@@ -209,3 +209,20 @@ class TestRefillGuard:
         await coord._async_handle_state_change(_playing_event())
 
         coord._refill.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_refill_when_not_playing(self):
+        """A paused player with a draining queue must not trigger refill."""
+        coord = _make_coordinator({"name": "Test Playlist", "refill_threshold": 2})
+        self._prep(coord, queue_depth=(10, 8))  # items_after = 1 < 2
+        coord.enqueued_tracks = ["A - One"]
+
+        state = MagicMock()
+        state.state = "paused"
+        state.attributes = {}
+        event = MagicMock()
+        event.data = {"new_state": state}
+
+        await coord._async_handle_state_change(event)
+
+        coord._refill.assert_not_awaited()

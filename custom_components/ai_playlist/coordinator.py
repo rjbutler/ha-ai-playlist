@@ -323,19 +323,9 @@ class PlaylistCoordinator:
                     since_internal_clear,
                 )
                 return
-            # DIAGNOSTIC INSTRUMENTATION: cross-check the items=0 queue event
-            # against a live get_queue read. If the live read shows items>0,
-            # the detach was driven by a transient/spurious event rather than a
-            # genuine drain. Remove once root cause is confirmed.
-            live_items, live_index = await self._check_queue_depth()
             _LOGGER.info(
-                "Detaching from %s — queue cleared to 0 (queue event); "
-                "live get_queue at detach: items=%s current_index=%s "
-                "enqueued_tracks=%d",
+                "Detaching from %s — queue cleared to 0 (queue event)",
                 self.entity_id,
-                live_items,
-                live_index,
-                len(self.enqueued_tracks),
             )
             await self._detach()
 
