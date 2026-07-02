@@ -184,22 +184,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ):
             player_state = hass.states.get(entity_id)
             if player_state and player_state.state in ("paused", "idle"):
-                await hass.services.async_call(
-                    "media_player",
-                    "media_play",
-                    {},
-                    target={"entity_id": entity_id},
-                    blocking=True,
-                )
+                if await existing.async_can_resume():
+                    await hass.services.async_call(
+                        "media_player",
+                        "media_play",
+                        {},
+                        target={"entity_id": entity_id},
+                        blocking=True,
+                    )
+                    _LOGGER.info(
+                        "Resumed existing playlist '%s' on %s",
+                        existing.playlist_name,
+                        entity_id,
+                    )
+                    sensor = get_or_create_sensor(hass, entity_id)
+                    if sensor:
+                        sensor.update_playback(existing.playlist_name, collection_name)
+                    return
                 _LOGGER.info(
-                    "Resumed existing playlist '%s' on %s",
+                    "Existing session for '%s' on %s is not resumable "
+                    "(state=%s, empty or stale queue) — rebuilding",
                     existing.playlist_name,
                     entity_id,
+                    existing.state,
                 )
-                sensor = get_or_create_sensor(hass, entity_id)
-                if sensor:
-                    sensor.update_playback(existing.playlist_name, collection_name)
-                return
 
         # Different playlist or not attached — tear down and start fresh
         if existing:

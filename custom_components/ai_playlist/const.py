@@ -10,6 +10,10 @@ DEFAULT_TRACK_COUNT: Final = 10
 DEFAULT_HISTORY_DEPTH: Final = 50
 DEFAULT_REFILL_THRESHOLD: Final = 2
 
+# Per-track ceiling on blocking music_assistant.play_media calls — MA can wedge
+# a command indefinitely while a sync group is dissolving/re-forming
+ENQUEUE_TIMEOUT: Final = 30
+
 # Coordinator states
 STATE_IDLE: Final = "idle"
 STATE_GENERATING: Final = "generating"

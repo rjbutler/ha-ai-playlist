@@ -1,6 +1,7 @@
 """Playlist coordinator — manages the lifecycle of one active playlist session."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -14,6 +15,7 @@ from .const import (
     DEFAULT_REFILL_THRESHOLD,
     DEFAULT_TRACK_COUNT,
     DOMAIN,
+    ENQUEUE_TIMEOUT,
     EXCLUDE_LIVE_DIRECTIVE,
     STATE_ENQUEUING,
     STATE_ERROR,
@@ -168,6 +170,7 @@ class PlaylistCoordinator:
         self._last_internal_queue_clear: float = 0.0
         self._initial_enqueue_count: int = 0
         self._queue_id: str | None = None
+        self._start_task: asyncio.Task | None = None
 
     @property
     def track_count(self) -> int:
@@ -208,6 +211,11 @@ class PlaylistCoordinator:
         """Start the playlist session: generate/restore, enqueue, monitor."""
         count = track_count or self.track_count
 
+        # Record the running task so _detach can cancel a startup that wedges
+        # on a blocking MA call (a stuck startup otherwise leaves a zombie
+        # session with no listeners attached)
+        self._start_task = asyncio.current_task()
+
         # Suppress state change handling during initial setup
         self._generating = True
         try:
@@ -241,6 +249,8 @@ class PlaylistCoordinator:
 
         # Subscribe to MA queue events for detach detection
         self._subscribe_to_queue_events()
+
+        self._start_task = None
 
     def _subscribe_to_queue_events(self) -> None:
         """Subscribe to Music Assistant queue events via the MA client."""
@@ -373,6 +383,15 @@ class PlaylistCoordinator:
         is_playing = player_state and player_state.state == "playing"
 
         for i, track in enumerate(tracks):
+            if self.state == STATE_IDLE:
+                # Detached mid-enqueue (e.g. torn down by a new play call) —
+                # don't keep pushing tracks into a queue we no longer own
+                _LOGGER.info(
+                    "Session detached mid-enqueue — skipping %d remaining tracks",
+                    len(tracks) - i,
+                )
+                return
+
             artist = track["artist"]
             title = track["title"]
             album = track.get("album", "")
@@ -383,20 +402,28 @@ class PlaylistCoordinator:
                 enqueue = "add"
 
             try:
-                await self.hass.services.async_call(
-                    "music_assistant",
-                    "play_media",
-                    {
-                        "media_id": title,
-                        "media_type": "track",
-                        "artist": artist,
-                        "album": album,
-                        "enqueue": enqueue,
-                    },
-                    target={"entity_id": self.entity_id},
-                    blocking=True,
+                await asyncio.wait_for(
+                    self.hass.services.async_call(
+                        "music_assistant",
+                        "play_media",
+                        {
+                            "media_id": title,
+                            "media_type": "track",
+                            "artist": artist,
+                            "album": album,
+                            "enqueue": enqueue,
+                        },
+                        target={"entity_id": self.entity_id},
+                        blocking=True,
+                    ),
+                    timeout=ENQUEUE_TIMEOUT,
                 )
                 self.enqueued_tracks.append(track_dict_to_string(track))
+            except TimeoutError:
+                _LOGGER.warning(
+                    "Enqueue timed out after %ss for track: %s - %s",
+                    ENQUEUE_TIMEOUT, artist, title,
+                )
             except Exception:
                 _LOGGER.warning("Failed to enqueue track: %s - %s", artist, title)
 
@@ -640,6 +667,17 @@ class PlaylistCoordinator:
         preserve_session: if True, don't clear the active session record (used
         during HA shutdown so the session can be resurrected on next start).
         """
+        if (
+            self._start_task
+            and self._start_task is not asyncio.current_task()
+            and not self._start_task.done()
+        ):
+            # Startup is still in flight (possibly wedged on an MA call) —
+            # cancel it so it can't wake up later and enqueue into a queue
+            # that now belongs to a different session
+            self._start_task.cancel()
+        self._start_task = None
+
         if self._unsub_state_listener:
             self._unsub_state_listener()
             self._unsub_state_listener = None
@@ -672,6 +710,18 @@ class PlaylistCoordinator:
         coordinators = self.hass.data.get(DOMAIN, {}).get("coordinators", {})
         if coordinators.get(self.entity_id) is self:
             del coordinators[self.entity_id]
+
+    async def async_can_resume(self) -> bool:
+        """Whether nudging media_play is enough to resume this session.
+
+        False when startup never completed (zombie session) or the MA queue
+        has no items — in both cases the caller should rebuild the session
+        instead of resuming a dead queue.
+        """
+        if self.state not in (STATE_PLAYING, STATE_REFILLING):
+            return False
+        items, _ = await self._check_queue_depth()
+        return items > 0
 
     async def async_stop(self) -> None:
         """Stop the coordinator (called by service or unload)."""
