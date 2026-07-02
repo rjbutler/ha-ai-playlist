@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.ai_playlist.const import STATE_PLAYING
 from custom_components.ai_playlist.coordinator import PlaylistCoordinator
 
 
@@ -134,9 +135,14 @@ class TestResumeAfterRestart:
         await coord.async_resume_after_restart()
 
         assert coord.enqueued_tracks == ["C - Three", "D - Four"]
+        # Post-resume side effects: playing state, listeners wired up
+        assert coord.state == STATE_PLAYING
+        coord._subscribe_to_queue_events.assert_called_once()
+        assert coord._unsub_state_listener is not None
 
     @pytest.mark.asyncio
-    async def test_queue_read_failure_falls_back_to_cache(self):
+    async def test_empty_live_queue_falls_back_to_cache(self):
+        """Queue read returned nothing — cache peek alone seeds enqueued_tracks."""
         coord = _make_coordinator()
         self._prep(coord, cache_peek=["Cached - Song"], played=[], upcoming=[])
 
