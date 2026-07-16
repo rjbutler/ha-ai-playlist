@@ -75,6 +75,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 entry=entry,
             )
 
+            # If this player is currently synced into a group led by another
+            # player, its audio flows through the group's shared queue, which
+            # the group leader's own session manages. Resurrecting a member
+            # session here would put two coordinators on one queue and
+            # interleave their tracks. Skip it — the leader's session refills.
+            subsuming = coordinator._subsuming_group_entity()
+            if subsuming:
+                _LOGGER.info(
+                    "Skipping resurrection for %s — synced into group %s "
+                    "(shared queue managed by that group's session)",
+                    entity_id, subsuming,
+                )
+                await store.clear_active_session(entity_id)
+                continue
+
             confidence = await coordinator.async_assess_resurrection_confidence()
             if confidence == "none":
                 _LOGGER.info(

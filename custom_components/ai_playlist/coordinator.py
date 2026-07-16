@@ -205,6 +205,34 @@ class PlaylistCoordinator:
                 return queue_id
         return None
 
+    def _subsuming_group_entity(self) -> str | None:
+        """Return the group player's entity_id if our player is a synced member.
+
+        When a player is synced into a Music Assistant group, its audio flows
+        through the group's shared queue and its own `active_queue` points at
+        that group queue. MA leaves the *member's* `group_members` empty and
+        only populates it on the *group* player, so membership is detected from
+        the group's side: some other media_player shares our `active_queue` and
+        lists us in its `group_members`.
+
+        Returns None when we independently own our queue — including when our
+        player is itself the group leader (no other player lists us as a member).
+        """
+        state = self.hass.states.get(self.entity_id)
+        if not state:
+            return None
+        my_queue = state.attributes.get("active_queue")
+        if not my_queue:
+            return None
+        for other in self.hass.states.async_all("media_player"):
+            if other.entity_id == self.entity_id:
+                continue
+            if other.attributes.get("active_queue") != my_queue:
+                continue
+            if self.entity_id in (other.attributes.get("group_members") or []):
+                return other.entity_id
+        return None
+
     async def async_start(
         self, clear_queue: bool = True, track_count: int | None = None
     ) -> None:
@@ -519,6 +547,25 @@ class PlaylistCoordinator:
 
         player_state = new_state.state
         attrs = new_state.attributes
+
+        # If our player has been synced into a group led by another player, the
+        # audio now flows through that group's shared queue — which the group
+        # leader's own session is already managing. Detach cleanly rather than
+        # record the shared stream into our history or refill into a queue we
+        # don't own; otherwise two sessions interleave tracks into one queue
+        # (the "classical bleeding into classic rock" bug).
+        subsuming = self._subsuming_group_entity()
+        if subsuming:
+            _LOGGER.info(
+                "Detaching '%s' from %s — player was synced into group %s "
+                "(shared queue owned by that group's session)",
+                self.playlist_name,
+                self.entity_id,
+                subsuming,
+            )
+            await self._detach()
+            return
+
         media_title = attrs.get("media_title")
 
         # Record track to history (skip if same track as last recorded —
