@@ -30,6 +30,7 @@ from .store import PlaylistStore
 from .track_processing import (
     filter_tracks,
     merge_track_lists,
+    normalize_track,
     parse_ai_response,
     queue_item_to_track_string,
     split_track,
@@ -366,6 +367,62 @@ class PlaylistCoordinator:
                 self.entity_id,
             )
             await self._detach()
+            return
+
+        await self._check_external_takeover(data)
+
+    async def _check_external_takeover(self, data: dict) -> None:
+        """Detach if the queue was replaced externally (enqueue=replace).
+
+        An external replace swaps N items for M items without passing through
+        0, so the items==0 detach never fires and a stale session record
+        survives — later poisoning resurrection, cache, and history for the
+        wrong playlist (the 2026-08-03 cross-contamination bug).
+
+        A current track missing from enqueued_tracks ∪ history alone is not
+        proof of takeover — MA library metadata can diverge from the AI's
+        track text past what normalize_track bridges. Confirm against the
+        full live queue: only detach when none of our tracks remain on it.
+        """
+        since_internal_clear = time.monotonic() - self._last_internal_queue_clear
+        if since_internal_clear < 5.0:
+            return
+
+        current = queue_item_to_track_string(data.get("current_item"))
+        current_norm = normalize_track(current)
+        if not current_norm:
+            return
+
+        known = {n for t in self.enqueued_tracks if (n := normalize_track(t))}
+        if current_norm in known:
+            return
+
+        history = await self.hass.async_add_executor_job(
+            self.store.get_history, self.playlist_name
+        )
+        known |= {n for t in history if (n := normalize_track(t))}
+        if current_norm in known:
+            return
+
+        played, upcoming = await self._get_live_queue_tracks()
+        live = played + upcoming
+        if not live:
+            # Queue unreadable (MA client hiccup) — can't confirm, stay attached
+            return
+        if any(normalize_track(t) in known for t in live):
+            # Some of our tracks are still on the queue — metadata mismatch
+            # on the current track, not a takeover
+            return
+
+        _LOGGER.info(
+            "Detaching '%s' from %s — external queue takeover detected "
+            "(current track %r and all %d queue items unrecognized)",
+            self.playlist_name,
+            self.entity_id,
+            current,
+            len(live),
+        )
+        await self._detach()
 
     async def _generate_and_enqueue(
         self, track_count: int, clear_first: bool
@@ -644,8 +701,6 @@ class PlaylistCoordinator:
         media_artist = attrs.get("media_artist", "")
         if not (media_title and media_artist):
             return "low"
-
-        from .track_processing import normalize_track
 
         current_norm = normalize_track(f"{media_artist} - {media_title}")
         if not current_norm:

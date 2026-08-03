@@ -555,6 +555,37 @@ class TestQueueItemToTrackString:
         assert queue_item_to_track_string(item) == ""
 
 
+class TestQueueItemToTrackStringDictForm:
+    """MA QUEUE_UPDATED event payloads arrive as nested dicts (via to_dict())."""
+
+    def test_uses_media_item_artist_and_title(self):
+        item = {
+            "media_item": {
+                "artists": [{"name": "I Musici"}],
+                "name": "Brandenburg Concerto No. 3",
+            },
+            "name": "fallback",
+        }
+        assert queue_item_to_track_string(item) == "I Musici - Brandenburg Concerto No. 3"
+
+    def test_falls_back_to_display_name_without_media_item(self):
+        item = {"name": "Handel - Concerto Grosso Op. 3"}
+        assert queue_item_to_track_string(item) == "Handel - Concerto Grosso Op. 3"
+
+    def test_falls_back_to_display_name_when_artists_empty(self):
+        item = {
+            "media_item": {"artists": [], "name": "Orphan Title"},
+            "name": "X - Orphan Title",
+        }
+        assert queue_item_to_track_string(item) == "X - Orphan Title"
+
+    def test_returns_empty_string_for_none(self):
+        assert queue_item_to_track_string(None) == ""
+
+    def test_returns_empty_string_for_empty_dict(self):
+        assert queue_item_to_track_string({}) == ""
+
+
 class TestMergeTrackLists:
     def test_union_preserves_order_base_first(self):
         merged = merge_track_lists(["A - 1", "B - 2"], ["C - 3"])

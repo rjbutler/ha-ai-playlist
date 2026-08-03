@@ -79,21 +79,31 @@ def track_dict_to_string(track: dict) -> str:
     return base
 
 
+def _item_field(obj, key):
+    """Read a field from an MA queue item in object or dict form."""
+    if isinstance(obj, dict):
+        return obj.get(key)
+    return getattr(obj, key, None)
+
+
 def queue_item_to_track_string(item) -> str:
-    """Convert an MA QueueItem (duck-typed) to 'Artist - Title' format.
+    """Convert an MA QueueItem (duck-typed object or event-payload dict) to
+    'Artist - Title' format.
 
     Prefers media_item.artists[0].name + media_item.name; falls back to the
     queue item's display name. Returns '' if no usable name can be built.
     """
-    media_item = getattr(item, "media_item", None)
+    if item is None:
+        return ""
+    media_item = _item_field(item, "media_item")
     if media_item is not None:
-        artists = getattr(media_item, "artists", None) or []
-        title = getattr(media_item, "name", "") or ""
+        artists = _item_field(media_item, "artists") or []
+        title = _item_field(media_item, "name") or ""
         if artists and title:
-            artist = getattr(artists[0], "name", "") or ""
+            artist = _item_field(artists[0], "name") or ""
             if artist:
                 return f"{artist} - {title}"
-    return getattr(item, "name", "") or ""
+    return _item_field(item, "name") or ""
 
 
 def merge_track_lists(base: list[str], extra: list[str]) -> list[str]:

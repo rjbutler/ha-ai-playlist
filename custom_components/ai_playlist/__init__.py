@@ -36,6 +36,87 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+async def _resurrect_sessions(
+    hass: HomeAssistant, store: PlaylistStore, entry: ConfigEntry
+) -> None:
+    """Attempt to re-attach coordinators to sessions that survived HA restart."""
+    active_sessions = store.get_active_sessions()
+    if not active_sessions:
+        return
+
+    coordinators = hass.data[DOMAIN]["coordinators"]
+    for entity_id, session in active_sessions.items():
+        playlist_name = session.get("playlist_name", "")
+        collection_name = session.get("collection_name")
+
+        config = store.get_playlist(playlist_name)
+        if not config:
+            _LOGGER.warning(
+                "Session playlist '%s' for %s not found, clearing session",
+                playlist_name, entity_id,
+            )
+            await store.clear_active_session(entity_id)
+            continue
+
+        coordinator = PlaylistCoordinator(
+            hass=hass,
+            store=store,
+            playlist_config=config,
+            entity_id=entity_id,
+            entry=entry,
+        )
+
+        # If this player is currently synced into a group led by another
+        # player, its audio flows through the group's shared queue, which
+        # the group leader's own session manages. Resurrecting a member
+        # session here would put two coordinators on one queue and
+        # interleave their tracks. Skip it — the leader's session refills.
+        subsuming = coordinator._subsuming_group_entity()
+        if subsuming:
+            _LOGGER.info(
+                "Skipping resurrection for %s — synced into group %s "
+                "(shared queue managed by that group's session)",
+                entity_id, subsuming,
+            )
+            await store.clear_active_session(entity_id)
+            continue
+
+        confidence = await coordinator.async_assess_resurrection_confidence()
+        if confidence != "high":
+            # Resurrecting adopts the live MA queue as this playlist's
+            # content — anything short of a verified match risks absorbing
+            # a foreign queue into the playlist's cache and history (the
+            # 2026-08-03 cross-contamination bug). Leave the queue playing
+            # unmanaged; the unplayed cache is preserved for the next play.
+            if confidence == "none":
+                _LOGGER.info(
+                    "Skipping resurrection for %s — player off or queue empty",
+                    entity_id,
+                )
+            else:
+                _LOGGER.warning(
+                    "Skipping resurrection of '%s' on %s — current queue track "
+                    "not recognized from this playlist's history or cache "
+                    "(confidence=%s); leaving queue unmanaged",
+                    playlist_name, entity_id, confidence,
+                )
+            await store.clear_active_session(entity_id)
+            continue
+
+        _LOGGER.info(
+            "Resurrecting coordinator for '%s' on %s (ai_entity=%s, confidence=%s) — "
+            "any per-session ai_entity override from before the restart is not "
+            "persisted; falling back to the configured default",
+            playlist_name, entity_id, coordinator.ai_entity_id, confidence,
+        )
+        await coordinator.async_resume_after_restart()
+        coordinators[entity_id] = coordinator
+
+        sensor = get_or_create_sensor(hass, entity_id)
+        if sensor:
+            sensor.update_playback(playlist_name, collection_name)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AI Playlist from a config entry."""
     hass.data.setdefault(DOMAIN, {"coordinators": {}})
@@ -47,75 +128,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    async def _resurrect_sessions() -> None:
-        """Attempt to re-attach coordinators to sessions that survived HA restart."""
-        active_sessions = store.get_active_sessions()
-        if not active_sessions:
-            return
-
-        coordinators = hass.data[DOMAIN]["coordinators"]
-        for entity_id, session in active_sessions.items():
-            playlist_name = session.get("playlist_name", "")
-            collection_name = session.get("collection_name")
-
-            config = store.get_playlist(playlist_name)
-            if not config:
-                _LOGGER.warning(
-                    "Session playlist '%s' for %s not found, clearing session",
-                    playlist_name, entity_id,
-                )
-                await store.clear_active_session(entity_id)
-                continue
-
-            coordinator = PlaylistCoordinator(
-                hass=hass,
-                store=store,
-                playlist_config=config,
-                entity_id=entity_id,
-                entry=entry,
-            )
-
-            # If this player is currently synced into a group led by another
-            # player, its audio flows through the group's shared queue, which
-            # the group leader's own session manages. Resurrecting a member
-            # session here would put two coordinators on one queue and
-            # interleave their tracks. Skip it — the leader's session refills.
-            subsuming = coordinator._subsuming_group_entity()
-            if subsuming:
-                _LOGGER.info(
-                    "Skipping resurrection for %s — synced into group %s "
-                    "(shared queue managed by that group's session)",
-                    entity_id, subsuming,
-                )
-                await store.clear_active_session(entity_id)
-                continue
-
-            confidence = await coordinator.async_assess_resurrection_confidence()
-            if confidence == "none":
-                _LOGGER.info(
-                    "Skipping resurrection for %s — player off or queue empty", entity_id
-                )
-                await store.clear_active_session(entity_id)
-                continue
-
-            _LOGGER.info(
-                "Resurrecting coordinator for '%s' on %s (ai_entity=%s, confidence=%s) — "
-                "any per-session ai_entity override from before the restart is not "
-                "persisted; falling back to the configured default",
-                playlist_name, entity_id, coordinator.ai_entity_id, confidence,
-            )
-            await coordinator.async_resume_after_restart()
-            coordinators[entity_id] = coordinator
-
-            sensor = get_or_create_sensor(hass, entity_id)
-            if sensor:
-                sensor.update_playback(playlist_name, collection_name)
-
     from homeassistant.core import callback as ha_callback
 
     @ha_callback
     def _on_ha_started(_event) -> None:
-        hass.async_create_task(_resurrect_sessions())
+        hass.async_create_task(_resurrect_sessions(hass, store, entry))
 
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)
 

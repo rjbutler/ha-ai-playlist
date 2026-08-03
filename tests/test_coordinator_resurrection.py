@@ -1,10 +1,11 @@
-"""Tests for resurrection reconciliation and the refill guard."""
+"""Tests for resurrection reconciliation, the confidence gate, and the refill guard."""
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.ai_playlist.const import STATE_PLAYING
+import custom_components.ai_playlist as init_mod
+from custom_components.ai_playlist.const import DOMAIN, STATE_PLAYING
 from custom_components.ai_playlist.coordinator import PlaylistCoordinator
 
 
@@ -149,6 +150,66 @@ class TestResumeAfterRestart:
         await coord.async_resume_after_restart()
 
         assert coord.enqueued_tracks == ["Cached - Song"]
+
+
+class TestResurrectionConfidenceGate:
+    """Regression tests for the cache cross-contamination bug (2026-08-03):
+    resurrection at confidence=low adopted a foreign live queue as this
+    playlist's content. Only confidence=high may resurrect."""
+
+    def _setup(self, monkeypatch, confidence):
+        hass = MagicMock()
+        hass.data = {DOMAIN: {"coordinators": {}}}
+        store = MagicMock()
+        store.get_active_sessions.return_value = {
+            "media_player.test": {"playlist_name": "Test Playlist"}
+        }
+        store.get_playlist.return_value = {"name": "Test Playlist"}
+        store.clear_active_session = AsyncMock()
+        entry = MagicMock()
+
+        coordinator = MagicMock()
+        coordinator._subsuming_group_entity.return_value = None
+        coordinator.async_assess_resurrection_confidence = AsyncMock(
+            return_value=confidence
+        )
+        coordinator.async_resume_after_restart = AsyncMock()
+        monkeypatch.setattr(
+            init_mod, "PlaylistCoordinator", MagicMock(return_value=coordinator)
+        )
+        return hass, store, entry, coordinator
+
+    @pytest.mark.asyncio
+    async def test_low_confidence_skips_and_clears_session(self, monkeypatch):
+        """Queue has items but current track has no provenance — do not adopt it."""
+        hass, store, entry, coordinator = self._setup(monkeypatch, "low")
+
+        await init_mod._resurrect_sessions(hass, store, entry)
+
+        coordinator.async_resume_after_restart.assert_not_awaited()
+        store.clear_active_session.assert_awaited_once_with("media_player.test")
+        assert hass.data[DOMAIN]["coordinators"] == {}
+
+    @pytest.mark.asyncio
+    async def test_none_confidence_skips_and_clears_session(self, monkeypatch):
+        hass, store, entry, coordinator = self._setup(monkeypatch, "none")
+
+        await init_mod._resurrect_sessions(hass, store, entry)
+
+        coordinator.async_resume_after_restart.assert_not_awaited()
+        store.clear_active_session.assert_awaited_once_with("media_player.test")
+
+    @pytest.mark.asyncio
+    async def test_high_confidence_resurrects(self, monkeypatch):
+        hass, store, entry, coordinator = self._setup(monkeypatch, "high")
+
+        await init_mod._resurrect_sessions(hass, store, entry)
+
+        coordinator.async_resume_after_restart.assert_awaited_once()
+        store.clear_active_session.assert_not_awaited()
+        assert hass.data[DOMAIN]["coordinators"] == {
+            "media_player.test": coordinator
+        }
 
 
 def _playing_event():
