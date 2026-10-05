@@ -2,6 +2,7 @@
 import pytest
 
 from custom_components.ai_playlist.track_processing import (
+    pick_track_uri,
     filter_tracks,
     merge_track_lists,
     normalize_track,
@@ -604,3 +605,40 @@ class TestMergeTrackLists:
 
     def test_both_empty(self):
         assert merge_track_lists([], []) == []
+
+
+def _result(uri, artist, title, album=""):
+    return {"uri": uri, "name": title, "artists": [{"name": artist}], "album": {"name": album}}
+
+
+class TestPickTrackUri:
+    def test_prefers_artist_and_title_over_first_result(self):
+        results = [
+            _result("u:cover", "Some Cover Band", "Town Called Malice"),
+            _result("u:jam", "The Jam", "Town Called Malice"),
+        ]
+        assert pick_track_uri(results, {"artist": "The Jam", "title": "Town Called Malice"}) == "u:jam"
+
+    def test_album_breaks_ties(self):
+        results = [
+            _result("u:comp", "The Jam", "Town Called Malice", "Greatest Hits"),
+            _result("u:gift", "The Jam", "Town Called Malice", "The Gift"),
+        ]
+        track = {"artist": "The Jam", "title": "Town Called Malice", "album": "The Gift"}
+        assert pick_track_uri(results, track) == "u:gift"
+
+    def test_normalizes_remaster_suffix_and_ampersand(self):
+        results = [
+            _result("u:other", "Other", "Something"),
+            _result("u:hit", "Simon & Garfunkel", "The Boxer (Remastered)"),
+        ]
+        track = {"artist": "Simon and Garfunkel", "title": "The Boxer"}
+        assert pick_track_uri(results, track) == "u:hit"
+
+    def test_falls_back_to_first_result(self):
+        results = [_result("u:first", "X", "Y"), _result("u:second", "Z", "W")]
+        assert pick_track_uri(results, {"artist": "A", "title": "B"}) == "u:first"
+
+    def test_no_results_or_no_uri(self):
+        assert pick_track_uri([], {"artist": "A", "title": "B"}) is None
+        assert pick_track_uri([{"name": "B"}], {"artist": "A", "title": "B"}) is None

@@ -14,6 +14,15 @@ DEFAULT_REFILL_THRESHOLD: Final = 2
 # a command indefinitely while a sync group is dissolving/re-forming
 ENQUEUE_TIMEOUT: Final = 30
 
+# Track -> MA URI resolution. Each uncached track costs one provider search,
+# which is what trips Apple Music's rate limiter; unresolved tracks get one
+# retry pass after URI_RETRY_DELAY (MA keeps a timed-out search running in
+# the background, so the retry often lands on a warm result).
+SEARCH_TIMEOUT: Final = 30
+URI_RETRY_DELAY: Final = 10
+URI_CACHE_MAX: Final = 5000
+URI_CACHE_SAVE_DELAY: Final = 30
+
 # Coordinator states
 STATE_IDLE: Final = "idle"
 STATE_GENERATING: Final = "generating"
@@ -25,6 +34,7 @@ STATE_ERROR: Final = "error"
 # Storage keys
 STORAGE_KEY_PLAYLISTS: Final = "ai_playlist.playlists"
 STORAGE_KEY_SESSIONS: Final = "ai_playlist.sessions"
+STORAGE_KEY_URI_CACHE: Final = "ai_playlist.uri_cache"
 STORAGE_VERSION: Final = 1
 
 # Config flow keys

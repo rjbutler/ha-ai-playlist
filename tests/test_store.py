@@ -31,6 +31,8 @@ def tmp_store(tmp_path):
     store._sessions_store = MagicMock()
     store._sessions_store.async_load = AsyncMock(return_value=None)
     store._sessions_store.async_save = AsyncMock()
+    store._uri_store = MagicMock()
+    store._uri_store.async_load = AsyncMock(return_value=None)
     return store
 
 
@@ -299,3 +301,36 @@ class TestSessions:
         await tmp_store.set_active_session("media_player.office", "B")
         known = tmp_store.get_known_players()
         assert known.count("media_player.office") == 1
+
+
+# ── Track URI cache ──────────────────────────────────────────────
+
+
+class TestTrackUriCache:
+    def test_lookup_is_normalized(self, tmp_store):
+        tmp_store.set_track_uri("Simon & Garfunkel - The Boxer | Bridge", "u:1")
+        assert tmp_store.get_track_uri("simon and garfunkel - The Boxer (Remastered)") == "u:1"
+        tmp_store._uri_store.async_delay_save.assert_called()
+
+    def test_evicts_oldest_past_cap(self, tmp_store, monkeypatch):
+        import custom_components.ai_playlist.store as store_mod
+        monkeypatch.setattr(store_mod, "URI_CACHE_MAX", 2)
+        tmp_store.set_track_uri("A - One", "u:1")
+        tmp_store.set_track_uri("B - Two", "u:2")
+        tmp_store.get_track_uri("A - One")
+        tmp_store.set_track_uri("A - One", "u:1b")  # re-set refreshes recency
+        tmp_store.set_track_uri("C - Three", "u:3")
+        assert tmp_store.get_track_uri("B - Two") is None
+        assert tmp_store.get_track_uri("A - One") == "u:1b"
+        assert tmp_store.get_track_uri("C - Three") == "u:3"
+
+    def test_forget(self, tmp_store):
+        tmp_store.set_track_uri("A - One", "u:1")
+        tmp_store.forget_track_uri("A - One")
+        assert tmp_store.get_track_uri("A - One") is None
+
+    @pytest.mark.asyncio
+    async def test_loaded_from_storage(self, tmp_store):
+        tmp_store._uri_store.async_load = AsyncMock(return_value={"tracks": {"a - one": "u:1"}})
+        await tmp_store.async_load()
+        assert tmp_store.get_track_uri("A - One") == "u:1"

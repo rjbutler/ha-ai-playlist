@@ -17,6 +17,7 @@ from .const import (
     DOMAIN,
     ENQUEUE_TIMEOUT,
     EXCLUDE_LIVE_DIRECTIVE,
+    SEARCH_TIMEOUT,
     STATE_ENQUEUING,
     STATE_ERROR,
     STATE_GENERATING,
@@ -24,6 +25,7 @@ from .const import (
     STATE_PLAYING,
     STATE_REFILLING,
     SYSTEM_PROMPT,
+    URI_RETRY_DELAY,
 )
 from .sensor import get_sensor
 from .store import PlaylistStore
@@ -32,6 +34,7 @@ from .track_processing import (
     merge_track_lists,
     normalize_track,
     parse_ai_response,
+    pick_track_uri,
     queue_item_to_track_string,
     split_track,
     strip_album,
@@ -452,67 +455,146 @@ class PlaylistCoordinator:
 
         await self._enqueue_tracks(valid_dicts, clear_first=clear_first)
 
+    def _get_mass_entry_id(self) -> str | None:
+        """Return the config entry id of the loaded Music Assistant integration."""
+        for entry in self.hass.config_entries.async_entries("music_assistant"):
+            if entry.state is ConfigEntryState.LOADED:
+                return entry.entry_id
+        return None
+
+    async def _resolve_track_uri(self, track: dict) -> str | None:
+        """Resolve a generated track to a playable MA URI, using the cache first.
+
+        Uncached tracks cost one track-only search. Queueing by URI keeps MA's
+        play_media from running its own library + global search per track.
+        """
+        track_str = track_dict_to_string(track)
+        if cached := self.store.get_track_uri(track_str):
+            return cached
+
+        entry_id = self._get_mass_entry_id()
+        if entry_id is None:
+            _LOGGER.warning("Music Assistant not loaded — cannot resolve %s", track_str)
+            return None
+
+        try:
+            response = await asyncio.wait_for(
+                self.hass.services.async_call(
+                    "music_assistant",
+                    "search",
+                    {
+                        "config_entry_id": entry_id,
+                        "name": track["title"],
+                        "artist": track["artist"],
+                        "media_type": ["track"],
+                        "limit": 5,
+                    },
+                    blocking=True,
+                    return_response=True,
+                ),
+                timeout=SEARCH_TIMEOUT,
+            )
+        except Exception as err:  # noqa: BLE001 — includes TimeoutError
+            _LOGGER.debug("Search failed for %s: %r", track_str, err)
+            return None
+
+        results = response.get("tracks", []) if isinstance(response, dict) else []
+        uri = pick_track_uri(results, track)
+        if uri:
+            self.store.set_track_uri(track_str, uri)
+        return uri
+
     async def _enqueue_tracks(self, tracks: list[dict], clear_first: bool) -> None:
-        """Enqueue tracks to Music Assistant."""
+        """Resolve tracks to MA URIs and enqueue them.
+
+        Tracks that fail to resolve (typically provider rate limiting) are
+        retried once after URI_RETRY_DELAY; the queue is never touched for a
+        track without a URI.
+        """
         self.state = STATE_ENQUEUING
 
-        player_state = self.hass.states.get(self.entity_id)
-        is_playing = player_state and player_state.state == "playing"
-
-        for i, track in enumerate(tracks):
-            if self.state == STATE_IDLE:
-                # Detached mid-enqueue (e.g. torn down by a new play call) —
-                # don't keep pushing tracks into a queue we no longer own
+        pending = list(tracks)
+        for attempt in range(2):
+            if attempt:
                 _LOGGER.info(
-                    "Session detached mid-enqueue — skipping %d remaining tracks",
-                    len(tracks) - i,
+                    "Retrying %d unresolved tracks in %ss", len(pending), URI_RETRY_DELAY
                 )
+                await asyncio.sleep(URI_RETRY_DELAY)
+
+            unresolved: list[dict] = []
+            for i, track in enumerate(pending):
+                if self.state == STATE_IDLE:
+                    # Detached mid-enqueue (e.g. torn down by a new play call) —
+                    # don't keep pushing tracks into a queue we no longer own
+                    _LOGGER.info(
+                        "Session detached mid-enqueue — skipping %d remaining tracks",
+                        len(pending) - i,
+                    )
+                    return
+
+                uri = await self._resolve_track_uri(track)
+                if uri is None:
+                    unresolved.append(track)
+                    continue
+                if await self._enqueue_uri(track, uri, clear_first):
+                    clear_first = False
+
+            pending = unresolved
+            if not pending:
                 return
 
-            artist = track["artist"]
-            title = track["title"]
-            album = track.get("album", "")
+        for track in pending:
+            _LOGGER.warning(
+                "Could not resolve track: %s - %s", track["artist"], track["title"]
+            )
 
-            # Keep replacing until one enqueue succeeds: if the replace
-            # fails (e.g. provider rate limit), "add"ing onto the stale
-            # queue of an idle player never starts playback.
-            enqueue = "replace" if clear_first else "add"
-            if clear_first:
-                # A "replace" makes MA clear the queue first, emitting a
-                # QUEUE_UPDATED items=0 event that can arrive after we return
-                # to STATE_PLAYING; this marker stops _async_handle_queue_update
-                # treating it as an external clear. Re-armed per attempt since
-                # a fallback replace can land well after the first (30s timeouts).
-                self._last_internal_queue_clear = time.monotonic()
+    async def _enqueue_uri(self, track: dict, uri: str, replace: bool) -> bool:
+        """Enqueue one resolved track. Returns True on success."""
+        artist = track["artist"]
+        title = track["title"]
 
-            try:
-                await asyncio.wait_for(
-                    self.hass.services.async_call(
-                        "music_assistant",
-                        "play_media",
-                        {
-                            "media_id": title,
-                            "media_type": "track",
-                            "artist": artist,
-                            "album": album,
-                            "enqueue": enqueue,
-                        },
-                        target={"entity_id": self.entity_id},
-                        blocking=True,
-                    ),
-                    timeout=ENQUEUE_TIMEOUT,
-                )
-                self.enqueued_tracks.append(track_dict_to_string(track))
-                if clear_first:
-                    self._last_internal_queue_clear = time.monotonic()
-                    clear_first = False
-            except TimeoutError:
-                _LOGGER.warning(
-                    "Enqueue timed out after %ss for track: %s - %s",
-                    ENQUEUE_TIMEOUT, artist, title,
-                )
-            except Exception:
-                _LOGGER.warning("Failed to enqueue track: %s - %s", artist, title)
+        # Keep replacing until one enqueue succeeds: if the replace fails,
+        # "add"ing onto the stale queue of an idle player never starts playback.
+        enqueue = "replace" if replace else "add"
+        if replace:
+            # A "replace" makes MA clear the queue first, emitting a
+            # QUEUE_UPDATED items=0 event that can arrive after we return
+            # to STATE_PLAYING; this marker stops _async_handle_queue_update
+            # treating it as an external clear. Re-armed per attempt since
+            # a fallback replace can land well after the first (30s timeouts).
+            self._last_internal_queue_clear = time.monotonic()
+
+        try:
+            await asyncio.wait_for(
+                self.hass.services.async_call(
+                    "music_assistant",
+                    "play_media",
+                    {
+                        "media_id": uri,
+                        "media_type": "track",
+                        "enqueue": enqueue,
+                    },
+                    target={"entity_id": self.entity_id},
+                    blocking=True,
+                ),
+                timeout=ENQUEUE_TIMEOUT,
+            )
+        except TimeoutError:
+            _LOGGER.warning(
+                "Enqueue timed out after %ss for track: %s - %s",
+                ENQUEUE_TIMEOUT, artist, title,
+            )
+            return False
+        except Exception:
+            _LOGGER.warning("Failed to enqueue track: %s - %s (%s)", artist, title, uri)
+            # A cached URI that no longer plays must not be reused forever
+            self.store.forget_track_uri(track_dict_to_string(track))
+            return False
+
+        self.enqueued_tracks.append(track_dict_to_string(track))
+        if replace:
+            self._last_internal_queue_clear = time.monotonic()
+        return True
 
     async def _check_queue_depth(self) -> tuple[int, int]:
         """Get queue item count and current index from Music Assistant."""

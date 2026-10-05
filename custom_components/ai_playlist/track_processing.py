@@ -106,6 +106,52 @@ def queue_item_to_track_string(item) -> str:
     return _item_field(item, "name") or ""
 
 
+def pick_track_uri(results: list[dict], track: dict) -> str | None:
+    """Pick the best-matching track URI from music_assistant.search results.
+
+    Preference: artist+title match (album match breaks ties), then artist-only
+    match, then title-only match, then the first result — the last mirrors
+    what MA's own name lookup would have played. Returns None if no result
+    carries a URI.
+    """
+    candidates = [r for r in results if isinstance(r, dict) and r.get("uri")]
+    if not candidates:
+        return None
+
+    want_artist = normalize_track(track.get("artist", ""))
+    want_title = normalize_track(track.get("title", ""))
+    want_album = normalize_track(track.get("album", ""))
+
+    def fields(result: dict) -> tuple[str, str, str]:
+        artists = result.get("artists") or []
+        artist = artists[0].get("name", "") if artists and isinstance(artists[0], dict) else ""
+        album = result.get("album") or {}
+        album_name = album.get("name", "") if isinstance(album, dict) else ""
+        return (
+            normalize_track(artist),
+            normalize_track(result.get("name", "")),
+            normalize_track(album_name),
+        )
+
+    scored = []
+    for index, result in enumerate(candidates):
+        artist, title, album = fields(result)
+        artist_ok = bool(want_artist) and artist == want_artist
+        title_ok = bool(want_title) and title == want_title
+        album_ok = bool(want_album) and album == want_album
+        if artist_ok and title_ok:
+            rank = 0 if album_ok else 1
+        elif artist_ok:
+            rank = 2
+        elif title_ok:
+            rank = 3
+        else:
+            rank = 4
+        scored.append((rank, index, result["uri"]))
+    scored.sort()
+    return scored[0][2]
+
+
 def merge_track_lists(base: list[str], extra: list[str]) -> list[str]:
     """Order-preserving union of two track lists, deduped by normalize_track.
 

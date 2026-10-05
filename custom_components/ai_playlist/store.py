@@ -18,7 +18,10 @@ from .const import (
     DEFAULT_TRACK_COUNT,
     STORAGE_KEY_PLAYLISTS,
     STORAGE_KEY_SESSIONS,
+    STORAGE_KEY_URI_CACHE,
     STORAGE_VERSION,
+    URI_CACHE_MAX,
+    URI_CACHE_SAVE_DELAY,
 )
 from .track_processing import normalize_track
 
@@ -32,6 +35,8 @@ class PlaylistStore:
         self._hass = hass
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY_PLAYLISTS)
         self._sessions_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_SESSIONS)
+        self._uri_store = Store(hass, STORAGE_VERSION, STORAGE_KEY_URI_CACHE)
+        self._track_uris: dict[str, str] = {}  # normalized "artist - title" -> MA URI
         self._playlists: dict[str, dict] = {}
         self._active_sessions: dict[str, dict] = {}  # entity_id -> {playlist_name, collection_name}
         self._known_players: list[str] = []
@@ -59,6 +64,10 @@ class PlaylistStore:
         if sessions_data:
             self._active_sessions = sessions_data.get("sessions", {})
             self._known_players = sessions_data.get("known_players", [])
+
+        uri_data = await self._uri_store.async_load()
+        if uri_data:
+            self._track_uris = uri_data.get("tracks", {})
 
     async def _async_save(self) -> None:
         """Save playlist configs to HA storage."""
@@ -285,6 +294,40 @@ class PlaylistStore:
     def get_cache_peek(self, playlist_name: str) -> list[str]:
         """Get cached tracks without clearing them (non-destructive)."""
         return self._load_history_data(playlist_name).get("unplayed_cache", [])
+
+    # --- Track URI cache ---
+    #
+    # Keyed by normalize_track("Artist - Title"), so the AI's spelling variants
+    # share one entry. Insertion-ordered; the oldest entries are evicted past
+    # URI_CACHE_MAX. Saves are debounced — losing the last few entries on a
+    # crash only costs a re-search.
+
+    def get_track_uri(self, track: str) -> str | None:
+        """Return the cached MA URI for a track string, if any."""
+        key = normalize_track(track)
+        return self._track_uris.get(key) if key else None
+
+    def set_track_uri(self, track: str, uri: str) -> None:
+        """Cache the MA URI a track string resolved to."""
+        key = normalize_track(track)
+        if not key or not uri:
+            return
+        self._track_uris.pop(key, None)
+        self._track_uris[key] = uri
+        while len(self._track_uris) > URI_CACHE_MAX:
+            self._track_uris.pop(next(iter(self._track_uris)))
+        self._schedule_uri_save()
+
+    def forget_track_uri(self, track: str) -> None:
+        """Drop a cached URI (e.g. it no longer plays)."""
+        key = normalize_track(track)
+        if key and self._track_uris.pop(key, None) is not None:
+            self._schedule_uri_save()
+
+    def _schedule_uri_save(self) -> None:
+        self._uri_store.async_delay_save(
+            lambda: {"tracks": self._track_uris}, URI_CACHE_SAVE_DELAY
+        )
 
     # --- Async wrappers (lock-protected, executor-dispatched) ---
     #

@@ -25,6 +25,9 @@ def _make_coordinator(playlist_config=None):
     hass.config_entries.async_entries.return_value = []  # no MA client by default
     hass.data = {}
     store = MagicMock()
+    # URI cache hit for every track, "uri" = the title, so enqueue tests can
+    # assert on titles without exercising the search path
+    store.get_track_uri.side_effect = lambda track: track.split(" - ", 1)[1].split(" | ")[0]
     entry = MagicMock()
     entry.data = {"ai_entity": "ai_task.test"}
     entry.options = {}
@@ -202,3 +205,99 @@ class TestCanResume:
         coord.state = STATE_PLAYING
         coord._check_queue_depth = AsyncMock(return_value=(5, 1))
         assert await coord.async_can_resume() is True
+
+
+class TestResolveTrackUri:
+    def _coord_with_search(self, tracks_response):
+        coord = _make_coordinator()
+        coord.store.get_track_uri.side_effect = None
+        coord.store.get_track_uri.return_value = None
+        coord._get_mass_entry_id = MagicMock(return_value="ma_entry")
+        coord.hass.services.async_call = AsyncMock(return_value={"tracks": tracks_response})
+        return coord
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_skips_search(self):
+        coord = _make_coordinator()
+        coord.store.get_track_uri.side_effect = None
+        coord.store.get_track_uri.return_value = "apple_music://track/1"
+        coord.hass.services.async_call = AsyncMock()
+
+        uri = await coord._resolve_track_uri({"artist": "The Jam", "title": "Town Called Malice"})
+
+        assert uri == "apple_music://track/1"
+        coord.hass.services.async_call.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_search_result_is_cached(self):
+        coord = self._coord_with_search([
+            {"uri": "apple_music://track/9", "name": "Town Called Malice",
+             "artists": [{"name": "The Jam"}], "album": {"name": "The Gift"}},
+        ])
+
+        uri = await coord._resolve_track_uri({"artist": "The Jam", "title": "Town Called Malice"})
+
+        assert uri == "apple_music://track/9"
+        coord.store.set_track_uri.assert_called_once_with(
+            "The Jam - Town Called Malice", "apple_music://track/9"
+        )
+        data = coord.hass.services.async_call.call_args.args[2]
+        assert data["media_type"] == ["track"]
+        assert data["config_entry_id"] == "ma_entry"
+
+    @pytest.mark.asyncio
+    async def test_empty_search_returns_none_and_caches_nothing(self):
+        coord = self._coord_with_search([])
+
+        assert await coord._resolve_track_uri({"artist": "A", "title": "B"}) is None
+        coord.store.set_track_uri.assert_not_called()
+
+
+class TestUnresolvedRetry:
+    @pytest.mark.asyncio
+    async def test_unresolved_track_retried_once_and_never_touches_queue(self, monkeypatch):
+        monkeypatch.setattr(coordinator_mod, "URI_RETRY_DELAY", 0)
+        coord = _make_coordinator()
+        attempts = {"Two": 0, "Never": 0}
+
+        async def fake_resolve(track):
+            title = track["title"]
+            if title in attempts:
+                attempts[title] += 1
+                if title == "Two" and attempts[title] == 2:
+                    return "uri:Two"
+                return None
+            return f"uri:{title}"
+
+        coord._resolve_track_uri = fake_resolve
+        played = []
+
+        async def fake_call(domain, service, data, target=None, blocking=False):
+            played.append((data["media_id"], data["enqueue"]))
+
+        coord.hass.services.async_call = fake_call
+        tracks = [
+            {"artist": "A", "title": "Two"},
+            {"artist": "B", "title": "Never"},
+            {"artist": "C", "title": "Three"},
+        ]
+
+        await coord._enqueue_tracks(tracks, clear_first=True)
+
+        # Unresolved first track must not consume the replace
+        assert played == [("uri:Three", "replace"), ("uri:Two", "add")]
+        assert attempts == {"Two": 2, "Never": 2}
+        assert coord.enqueued_tracks == ["C - Three", "A - Two"]
+
+    @pytest.mark.asyncio
+    async def test_failed_enqueue_forgets_cached_uri(self):
+        coord = _make_coordinator()
+
+        async def fake_call(domain, service, data, target=None, blocking=False):
+            raise RuntimeError("gone")
+
+        coord.hass.services.async_call = fake_call
+
+        await coord._enqueue_tracks([{"artist": "A", "title": "One"}], clear_first=True)
+
+        coord.store.forget_track_uri.assert_called_once_with("A - One")
