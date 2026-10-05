@@ -106,21 +106,34 @@ def queue_item_to_track_string(item) -> str:
     return _item_field(item, "name") or ""
 
 
-def pick_track_uri(results: list[dict], track: dict) -> str | None:
+_LIVE_MARKER = re.compile(r"[\(\[][^\)\]]*\blive\b|\s-\s.*\blive\b", re.IGNORECASE)
+
+
+def _is_live_title(title: str) -> bool:
+    """Whether a raw title marks a live recording, e.g. 'Song (Live at X)'."""
+    return bool(title) and bool(_LIVE_MARKER.search(title))
+
+
+def pick_track_uri(results: list[dict], track: dict) -> tuple[str | None, bool]:
     """Pick the best-matching track URI from music_assistant.search results.
 
-    Preference: artist+title match (album match breaks ties), then artist-only
-    match, then title-only match, then the first result — the last mirrors
-    what MA's own name lookup would have played. Returns None if no result
-    carries a URI.
+    Returns (uri, confident). Preference: artist+title match (album match
+    breaks ties), then artist-only, then title-only, then the first result —
+    the last mirrors what MA's own name lookup would have played. Within a
+    tier, a live version ranks below a studio one unless the request itself
+    is live (normalize_track strips "(Live ...)", so it can't tell them
+    apart). `confident` is True only when the artist matched; callers should
+    not cache a title-only or fallback pick. Returns (None, False) if no
+    result carries a URI.
     """
     candidates = [r for r in results if isinstance(r, dict) and r.get("uri")]
     if not candidates:
-        return None
+        return None, False
 
     want_artist = normalize_track(track.get("artist", ""))
     want_title = normalize_track(track.get("title", ""))
     want_album = normalize_track(track.get("album", ""))
+    want_live = _is_live_title(track.get("title", ""))
 
     def fields(result: dict) -> tuple[str, str, str]:
         artists = result.get("artists") or []
@@ -147,9 +160,11 @@ def pick_track_uri(results: list[dict], track: dict) -> str | None:
             rank = 3
         else:
             rank = 4
-        scored.append((rank, index, result["uri"]))
+        live_mismatch = _is_live_title(result.get("name", "")) != want_live
+        scored.append((rank, live_mismatch, index, result["uri"]))
     scored.sort()
-    return scored[0][2]
+    best_rank, _, _, uri = scored[0]
+    return uri, best_rank <= 2
 
 
 def merge_track_lists(base: list[str], extra: list[str]) -> list[str]:

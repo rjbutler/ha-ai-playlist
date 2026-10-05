@@ -1,5 +1,6 @@
 """The AI Playlist integration."""
 import asyncio
+from functools import partial
 import hashlib
 import logging
 
@@ -24,20 +25,24 @@ from .store import PlaylistStore
 _LOGGER = logging.getLogger(__name__)
 
 
-async def _start_until_first_track(
+async def _start_session(
     hass: HomeAssistant,
+    store: PlaylistStore,
     coordinator: PlaylistCoordinator,
-    entity_id: str,
     clear_queue: bool,
     track_count: int | None,
+    collection_name: str | None,
 ) -> None:
-    """Start a session, returning once its first track is queued.
+    """Start a session and record it, returning once its first track is queued.
 
     The rest of the batch keeps resolving/enqueuing in the background. Waiting
     for the whole batch held callers (and the dashboard state they update) for
     minutes while Apple Music rate-limited searches. A start that fails before
-    queuing anything still raises to the caller.
+    queuing anything raises; a start superseded by a newer play/stop returns
+    quietly without recording itself over the newer session.
     """
+    entity_id = coordinator.entity_id
+    playlist_name = coordinator.playlist_name
     start_task = hass.async_create_task(
         coordinator.async_start(clear_queue=clear_queue, track_count=track_count),
         f"ai_playlist start {entity_id}",
@@ -47,18 +52,47 @@ async def _start_until_first_track(
         await asyncio.wait({start_task, first_track}, return_when=asyncio.FIRST_COMPLETED)
     finally:
         first_track.cancel()
+
+    if start_task.cancelled():
+        _LOGGER.info(
+            "Start of '%s' on %s was superseded before its first track",
+            playlist_name,
+            entity_id,
+        )
+        return
     if start_task.done():
         start_task.result()
     else:
-        start_task.add_done_callback(_log_background_start_error)
+        start_task.add_done_callback(partial(_on_background_start_done, hass, coordinator))
 
-
-def _log_background_start_error(task: asyncio.Task) -> None:
-    """Log a session start that failed after the play service already returned."""
-    if task.cancelled():
+    if coordinator._detached:
         return
-    if (err := task.exception()) is not None:
-        _LOGGER.error("Playlist session start failed in background", exc_info=err)
+
+    await store.set_active_session(entity_id, playlist_name, collection_name)
+    sensor = get_or_create_sensor(hass, entity_id)
+    if sensor:
+        sensor.update_playback(playlist_name, collection_name)
+
+
+def _on_background_start_done(
+    hass: HomeAssistant, coordinator: PlaylistCoordinator, task: asyncio.Task
+) -> None:
+    """Tear down a session whose start failed after the play service returned.
+
+    Otherwise it would stay registered and recorded as active, with no state
+    listener or queue subscription attached — so it would never refill.
+    """
+    if task.cancelled() or (err := task.exception()) is None:
+        return
+    _LOGGER.error(
+        "Playlist session start for '%s' on %s failed in background",
+        coordinator.playlist_name,
+        coordinator.entity_id,
+        exc_info=err,
+    )
+    if not coordinator._detached:
+        hass.async_create_task(coordinator.async_stop())
+
 
 SERVICE_PLAY = "play"
 SERVICE_STOP = "stop"
@@ -294,14 +328,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             coordinator.ai_entity_id = ai_entity_override
         coordinators[entity_id] = coordinator
 
-        await _start_until_first_track(hass, coordinator, entity_id, clear_queue, track_count)
-
-        await store.set_active_session(entity_id, config.get("name", ""), collection_name)
-
-        # Update playback state sensor
-        sensor = get_or_create_sensor(hass, entity_id)
-        if sensor:
-            sensor.update_playback(config.get("name", ""), collection_name)
+        # Shielded: if the calling script is cancelled (e.g. play_music
+        # restarting on a second button press), the start and its session
+        # bookkeeping still complete instead of leaving an unrecorded session
+        session = hass.async_create_task(
+            _start_session(
+                hass, store, coordinator, clear_queue, track_count, collection_name
+            ),
+            f"ai_playlist session {entity_id}",
+        )
+        await asyncio.shield(session)
 
     async def async_handle_stop(call: ServiceCall) -> None:
         entity_id = call.data.get("entity_id")

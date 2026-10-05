@@ -617,7 +617,8 @@ class TestPickTrackUri:
             _result("u:cover", "Some Cover Band", "Town Called Malice"),
             _result("u:jam", "The Jam", "Town Called Malice"),
         ]
-        assert pick_track_uri(results, {"artist": "The Jam", "title": "Town Called Malice"}) == "u:jam"
+        track = {"artist": "The Jam", "title": "Town Called Malice"}
+        assert pick_track_uri(results, track) == ("u:jam", True)
 
     def test_album_breaks_ties(self):
         results = [
@@ -625,7 +626,7 @@ class TestPickTrackUri:
             _result("u:gift", "The Jam", "Town Called Malice", "The Gift"),
         ]
         track = {"artist": "The Jam", "title": "Town Called Malice", "album": "The Gift"}
-        assert pick_track_uri(results, track) == "u:gift"
+        assert pick_track_uri(results, track) == ("u:gift", True)
 
     def test_normalizes_remaster_suffix_and_ampersand(self):
         results = [
@@ -633,12 +634,38 @@ class TestPickTrackUri:
             _result("u:hit", "Simon & Garfunkel", "The Boxer (Remastered)"),
         ]
         track = {"artist": "Simon and Garfunkel", "title": "The Boxer"}
-        assert pick_track_uri(results, track) == "u:hit"
+        assert pick_track_uri(results, track) == ("u:hit", True)
 
-    def test_falls_back_to_first_result(self):
+    def test_studio_request_prefers_studio_over_live(self):
+        results = [
+            _result("u:live", "The Who", "My Generation (Live at Leeds)"),
+            _result("u:studio", "The Who", "My Generation"),
+        ]
+        track = {"artist": "The Who", "title": "My Generation"}
+        assert pick_track_uri(results, track) == ("u:studio", True)
+
+    def test_live_request_prefers_live(self):
+        results = [
+            _result("u:studio", "The Who", "My Generation"),
+            _result("u:live", "The Who", "My Generation (Live at Leeds)"),
+        ]
+        track = {"artist": "The Who", "title": "My Generation (Live at Leeds)"}
+        assert pick_track_uri(results, track) == ("u:live", True)
+
+    def test_live_word_in_studio_title_is_not_a_live_marker(self):
+        results = [_result("u:wings", "Wings", "Live and Let Die")]
+        track = {"artist": "Wings", "title": "Live and Let Die"}
+        assert pick_track_uri(results, track) == ("u:wings", True)
+
+    def test_title_only_match_is_not_confident(self):
+        results = [_result("u:cover", "Cover Band", "Blitzkrieg Bop")]
+        track = {"artist": "Ramones", "title": "Blitzkrieg Bop"}
+        assert pick_track_uri(results, track) == ("u:cover", False)
+
+    def test_falls_back_to_first_result_without_confidence(self):
         results = [_result("u:first", "X", "Y"), _result("u:second", "Z", "W")]
-        assert pick_track_uri(results, {"artist": "A", "title": "B"}) == "u:first"
+        assert pick_track_uri(results, {"artist": "A", "title": "B"}) == ("u:first", False)
 
     def test_no_results_or_no_uri(self):
-        assert pick_track_uri([], {"artist": "A", "title": "B"}) is None
-        assert pick_track_uri([{"name": "B"}], {"artist": "A", "title": "B"}) is None
+        assert pick_track_uri([], {"artist": "A", "title": "B"}) == (None, False)
+        assert pick_track_uri([{"name": "B"}], {"artist": "A", "title": "B"}) == (None, False)

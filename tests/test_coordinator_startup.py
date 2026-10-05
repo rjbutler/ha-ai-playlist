@@ -246,6 +246,18 @@ class TestResolveTrackUri:
         assert data["config_entry_id"] == "ma_entry"
 
     @pytest.mark.asyncio
+    async def test_unconfident_pick_plays_but_is_not_cached(self):
+        coord = self._coord_with_search([
+            {"uri": "apple_music://track/7", "name": "Something Else",
+             "artists": [{"name": "Unrelated"}]},
+        ])
+
+        uri = await coord._resolve_track_uri({"artist": "AI", "title": "Invented Song"})
+
+        assert uri == "apple_music://track/7"
+        coord.store.set_track_uri.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_empty_search_returns_none_and_caches_nothing(self):
         coord = self._coord_with_search([])
 
@@ -303,20 +315,28 @@ class TestUnresolvedRetry:
         coord.store.forget_track_uri.assert_called_once_with("A - One")
 
 
-class TestStartUntilFirstTrack:
+class TestStartSession:
     """ai_playlist.play returns once the first track is queued (2026-10-05)."""
 
-    def _hass(self):
+    def _setup(self):
         loop = asyncio.get_running_loop()
-        hass = MagicMock()
-        hass.async_create_task = lambda coro, name=None: loop.create_task(coro)
-        return hass
+        coord = _make_coordinator()
+        coord.hass.async_create_task = lambda coro, name=None: loop.create_task(coro)
+        store = MagicMock()
+        store.set_active_session = AsyncMock()
+        return coord, store
+
+    async def _run(self, coord, store):
+        from custom_components.ai_playlist import _start_session
+
+        await asyncio.wait_for(
+            _start_session(coord.hass, store, coord, True, None, "Genre"), timeout=1
+        )
 
     @pytest.mark.asyncio
-    async def test_returns_after_first_track_while_rest_keeps_enqueuing(self):
-        from custom_components.ai_playlist import _start_until_first_track
-
-        coord = _make_coordinator()
+    async def test_records_session_after_first_track_while_rest_keeps_enqueuing(self, monkeypatch):
+        coord, store = self._setup()
+        monkeypatch.setattr("custom_components.ai_playlist.get_or_create_sensor", MagicMock())
         release = asyncio.Event()
 
         async def slow_start(clear_queue, track_count):
@@ -325,17 +345,16 @@ class TestStartUntilFirstTrack:
 
         coord.async_start = slow_start
 
-        await asyncio.wait_for(
-            _start_until_first_track(self._hass(), coord, "media_player.test", True, None),
-            timeout=1,
+        await self._run(coord, store)
+
+        store.set_active_session.assert_awaited_once_with(
+            "media_player.test", "Test Playlist", "Genre"
         )
         release.set()
 
     @pytest.mark.asyncio
     async def test_start_failure_before_first_track_raises(self):
-        from custom_components.ai_playlist import _start_until_first_track
-
-        coord = _make_coordinator()
+        coord, store = self._setup()
 
         async def failing_start(clear_queue, track_count):
             raise RuntimeError("boom")
@@ -343,20 +362,53 @@ class TestStartUntilFirstTrack:
         coord.async_start = failing_start
 
         with pytest.raises(RuntimeError, match="boom"):
-            await _start_until_first_track(self._hass(), coord, "media_player.test", True, None)
+            await self._run(coord, store)
+        store.set_active_session.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_returns_when_start_finishes_with_nothing_queued(self):
-        from custom_components.ai_playlist import _start_until_first_track
+    async def test_superseded_start_returns_quietly_without_recording(self):
+        """A newer play cancels our start: no CancelledError, no session overwrite."""
+        coord, store = self._setup()
+        started = asyncio.Event()
 
-        coord = _make_coordinator()
-        coord.async_start = AsyncMock()
+        async def hung_start(clear_queue, track_count):
+            started.set()
+            await asyncio.Event().wait()
 
-        await asyncio.wait_for(
-            _start_until_first_track(self._hass(), coord, "media_player.test", True, None),
-            timeout=1,
+        coord.async_start = hung_start
+        from custom_components.ai_playlist import _start_session
+
+        session = asyncio.ensure_future(
+            _start_session(coord.hass, store, coord, True, None, "Genre")
         )
-        assert not coord.first_track_queued.is_set()
+        await started.wait()
+        for task in asyncio.all_tasks():
+            if task.get_coro().__name__ == "hung_start":
+                task.cancel()
+
+        await asyncio.wait_for(session, timeout=1)  # must not raise
+        store.set_active_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_background_failure_after_first_track_stops_session(self, monkeypatch):
+        coord, store = self._setup()
+        monkeypatch.setattr("custom_components.ai_playlist.get_or_create_sensor", MagicMock())
+        coord.async_stop = AsyncMock()
+        release = asyncio.Event()
+
+        async def late_failing_start(clear_queue, track_count):
+            coord.first_track_queued.set()
+            await release.wait()
+            raise RuntimeError("late")
+
+        coord.async_start = late_failing_start
+
+        await self._run(coord, store)
+        release.set()
+        for _ in range(5):
+            await asyncio.sleep(0)
+
+        coord.async_stop.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_first_successful_enqueue_sets_event(self):
@@ -375,3 +427,39 @@ class TestStartUntilFirstTrack:
             clear_first=True,
         )
         assert coord.first_track_queued.is_set()
+
+
+class TestDetachDuringRefill:
+    @pytest.mark.asyncio
+    async def test_detach_during_generation_discards_batch(self, monkeypatch):
+        """A refill generating when the session is torn down must not enqueue."""
+        coord = _make_coordinator()
+        coord.hass.async_add_executor_job = AsyncMock(return_value=[])
+
+        async def fake_generate(**kwargs):
+            coord._detached = True  # new play/stop tore us down meanwhile
+            coord.state = STATE_IDLE
+            return [{"artist": "A", "title": "One"}]
+
+        monkeypatch.setattr(coordinator_mod, "generate_tracks", fake_generate)
+        coord._enqueue_tracks = AsyncMock()
+
+        await coord._refill()
+
+        coord._enqueue_tracks.assert_not_called()
+        assert coord.state == STATE_IDLE
+
+    @pytest.mark.asyncio
+    async def test_fresh_coordinator_is_not_treated_as_detached(self):
+        """A not-yet-started coordinator is STATE_IDLE but must still enqueue."""
+        coord = _make_coordinator()
+        assert coord.state == STATE_IDLE
+        calls = []
+
+        async def fake_call(domain, service, data, target=None, blocking=False):
+            calls.append(data["media_id"])
+
+        coord.hass.services.async_call = fake_call
+        await coord._enqueue_tracks([{"artist": "A", "title": "One"}], clear_first=True)
+
+        assert calls == ["One"]

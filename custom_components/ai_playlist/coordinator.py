@@ -176,6 +176,11 @@ class PlaylistCoordinator:
         # service can return (and the UI update) without waiting for the whole
         # batch — resolving the rest can take minutes under provider rate limits
         self.first_track_queued = asyncio.Event()
+        # Set by _detach. Distinct from state == STATE_IDLE, which is also the
+        # state of a coordinator that hasn't started yet; in-flight generate /
+        # enqueue / refill work checks this so a torn-down session can't keep
+        # pushing tracks into a queue that now belongs to a new session
+        self._detached = False
         self._initial_enqueue_count: int = 0
         self._queue_id: str | None = None
         self._start_task: asyncio.Task | None = None
@@ -276,6 +281,9 @@ class PlaylistCoordinator:
             self._generating = False
 
         self._initial_enqueue_count = len(self.enqueued_tracks)
+        if self._detached:
+            self._start_task = None
+            return
 
         # Attach state listener for refill checks and history recording
         self.state = STATE_PLAYING
@@ -443,6 +451,9 @@ class PlaylistCoordinator:
             self.store.get_history, self.playlist_name
         )
 
+        if self._detached:
+            return
+
         try:
             valid_dicts = await generate_tracks(
                 hass=self.hass,
@@ -454,7 +465,16 @@ class PlaylistCoordinator:
                 track_count=track_count,
             )
         except HomeAssistantError:
-            self.state = STATE_ERROR
+            if not self._detached:
+                self.state = STATE_ERROR
+            return
+
+        if self._detached:
+            _LOGGER.info(
+                "Session for '%s' detached during generation — discarding %d tracks",
+                self.playlist_name,
+                len(valid_dicts),
+            )
             return
 
         await self._enqueue_tracks(valid_dicts, clear_first=clear_first)
@@ -503,8 +523,11 @@ class PlaylistCoordinator:
             return None
 
         results = response.get("tracks", []) if isinstance(response, dict) else []
-        uri = pick_track_uri(results, track)
-        if uri:
+        uri, confident = pick_track_uri(results, track)
+        if uri and confident:
+            # Only artist-matched picks are cached: a title-only or fallback
+            # pick (e.g. an AI-invented track) is played but re-searched next
+            # time rather than pinned forever
             self.store.set_track_uri(track_str, uri)
         return uri
 
@@ -515,6 +538,8 @@ class PlaylistCoordinator:
         retried once after URI_RETRY_DELAY; the queue is never touched for a
         track without a URI.
         """
+        if self._detached:
+            return
         self.state = STATE_ENQUEUING
 
         pending = list(tracks)
@@ -527,7 +552,7 @@ class PlaylistCoordinator:
 
             unresolved: list[dict] = []
             for i, track in enumerate(pending):
-                if self.state == STATE_IDLE:
+                if self._detached or self.state == STATE_IDLE:
                     # Detached mid-enqueue (e.g. torn down by a new play call) —
                     # don't keep pushing tracks into a queue we no longer own
                     _LOGGER.info(
@@ -762,7 +787,8 @@ class PlaylistCoordinator:
         """Generate and enqueue more tracks. Caller must set _generating=True."""
         self.state = STATE_REFILLING
         await self._generate_and_enqueue(self.track_count, clear_first=False)
-        self.state = STATE_PLAYING
+        if not self._detached:
+            self.state = STATE_PLAYING
 
     async def async_assess_resurrection_confidence(self) -> str:
         """Check whether an active session on this player can be resurrected.
@@ -896,6 +922,7 @@ class PlaylistCoordinator:
             sensor.update_idle()
 
         self.state = STATE_IDLE
+        self._detached = True
 
         # Remove from coordinator registry
         coordinators = self.hass.data.get(DOMAIN, {}).get("coordinators", {})
