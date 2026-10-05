@@ -61,6 +61,61 @@ class TestEnqueueTimeout:
 
         assert coord.enqueued_tracks == ["A - One", "C - Three"]
 
+    @pytest.mark.asyncio
+    async def test_replace_carries_over_when_first_track_fails(self):
+        """If the replace-enqueue fails, the next track must replace instead.
+
+        2026-10-05: Apple Music 429s failed track 1; tracks 2+ were "add"ed
+        onto the stale queue of an idle player, so nothing ever played.
+        """
+        coord = _make_coordinator()
+        coord.hass.states.get = MagicMock(return_value=SimpleNamespace(state="idle"))
+        modes = []
+
+        async def fake_call(domain, service, data, target=None, blocking=False):
+            modes.append((data["media_id"], data["enqueue"]))
+            if data["media_id"] in ("One", "Two"):
+                raise RuntimeError("rate limited")
+
+        coord.hass.services.async_call = fake_call
+        tracks = [
+            {"artist": "A", "title": "One"},
+            {"artist": "B", "title": "Two"},
+            {"artist": "C", "title": "Three"},
+            {"artist": "D", "title": "Four"},
+        ]
+
+        await coord._enqueue_tracks(tracks, clear_first=True)
+
+        assert modes == [
+            ("One", "replace"),
+            ("Two", "replace"),
+            ("Three", "replace"),
+            ("Four", "add"),
+        ]
+        assert coord.enqueued_tracks == ["C - Three", "D - Four"]
+
+    @pytest.mark.asyncio
+    async def test_fallback_replace_rearms_internal_clear_grace(self, monkeypatch):
+        """A late fallback replace must still be inside the items=0 grace window."""
+        clock = {"t": 1000.0}
+        monkeypatch.setattr(coordinator_mod.time, "monotonic", lambda: clock["t"])
+        coord = _make_coordinator()
+        coord.hass.states.get = MagicMock(return_value=SimpleNamespace(state="idle"))
+
+        async def fake_call(domain, service, data, target=None, blocking=False):
+            clock["t"] += 30.0  # each call burns a full enqueue timeout
+            if data["media_id"] == "One":
+                raise RuntimeError("rate limited")
+
+        coord.hass.services.async_call = fake_call
+        tracks = [{"artist": "A", "title": "One"}, {"artist": "B", "title": "Two"}]
+
+        await coord._enqueue_tracks(tracks, clear_first=True)
+
+        # Marker reflects the successful replace (t=1060), not the first try
+        assert coord._last_internal_queue_clear == 1060.0
+
 
 class TestEnqueueDetachGuard:
     @pytest.mark.asyncio

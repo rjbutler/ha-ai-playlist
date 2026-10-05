@@ -456,14 +456,6 @@ class PlaylistCoordinator:
         """Enqueue tracks to Music Assistant."""
         self.state = STATE_ENQUEUING
 
-        # When we issue a "replace" enqueue, MA clears the queue first.
-        # That clear emits a QUEUE_UPDATED event with items=0 which can
-        # arrive after we've returned to STATE_PLAYING; without this
-        # marker, _async_handle_queue_update would treat it as an
-        # external clear and detach. The grace window is checked there.
-        if clear_first:
-            self._last_internal_queue_clear = time.monotonic()
-
         player_state = self.hass.states.get(self.entity_id)
         is_playing = player_state and player_state.state == "playing"
 
@@ -481,10 +473,17 @@ class PlaylistCoordinator:
             title = track["title"]
             album = track.get("album", "")
 
-            if clear_first and i == 0:
-                enqueue = "replace"
-            else:
-                enqueue = "add"
+            # Keep replacing until one enqueue succeeds: if the replace
+            # fails (e.g. provider rate limit), "add"ing onto the stale
+            # queue of an idle player never starts playback.
+            enqueue = "replace" if clear_first else "add"
+            if clear_first:
+                # A "replace" makes MA clear the queue first, emitting a
+                # QUEUE_UPDATED items=0 event that can arrive after we return
+                # to STATE_PLAYING; this marker stops _async_handle_queue_update
+                # treating it as an external clear. Re-armed per attempt since
+                # a fallback replace can land well after the first (30s timeouts).
+                self._last_internal_queue_clear = time.monotonic()
 
             try:
                 await asyncio.wait_for(
@@ -504,6 +503,9 @@ class PlaylistCoordinator:
                     timeout=ENQUEUE_TIMEOUT,
                 )
                 self.enqueued_tracks.append(track_dict_to_string(track))
+                if clear_first:
+                    self._last_internal_queue_clear = time.monotonic()
+                    clear_first = False
             except TimeoutError:
                 _LOGGER.warning(
                     "Enqueue timed out after %ss for track: %s - %s",
