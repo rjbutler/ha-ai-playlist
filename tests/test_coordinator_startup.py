@@ -301,3 +301,77 @@ class TestUnresolvedRetry:
         await coord._enqueue_tracks([{"artist": "A", "title": "One"}], clear_first=True)
 
         coord.store.forget_track_uri.assert_called_once_with("A - One")
+
+
+class TestStartUntilFirstTrack:
+    """ai_playlist.play returns once the first track is queued (2026-10-05)."""
+
+    def _hass(self):
+        loop = asyncio.get_running_loop()
+        hass = MagicMock()
+        hass.async_create_task = lambda coro, name=None: loop.create_task(coro)
+        return hass
+
+    @pytest.mark.asyncio
+    async def test_returns_after_first_track_while_rest_keeps_enqueuing(self):
+        from custom_components.ai_playlist import _start_until_first_track
+
+        coord = _make_coordinator()
+        release = asyncio.Event()
+
+        async def slow_start(clear_queue, track_count):
+            coord.first_track_queued.set()
+            await release.wait()  # rest of the batch still resolving
+
+        coord.async_start = slow_start
+
+        await asyncio.wait_for(
+            _start_until_first_track(self._hass(), coord, "media_player.test", True, None),
+            timeout=1,
+        )
+        release.set()
+
+    @pytest.mark.asyncio
+    async def test_start_failure_before_first_track_raises(self):
+        from custom_components.ai_playlist import _start_until_first_track
+
+        coord = _make_coordinator()
+
+        async def failing_start(clear_queue, track_count):
+            raise RuntimeError("boom")
+
+        coord.async_start = failing_start
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await _start_until_first_track(self._hass(), coord, "media_player.test", True, None)
+
+    @pytest.mark.asyncio
+    async def test_returns_when_start_finishes_with_nothing_queued(self):
+        from custom_components.ai_playlist import _start_until_first_track
+
+        coord = _make_coordinator()
+        coord.async_start = AsyncMock()
+
+        await asyncio.wait_for(
+            _start_until_first_track(self._hass(), coord, "media_player.test", True, None),
+            timeout=1,
+        )
+        assert not coord.first_track_queued.is_set()
+
+    @pytest.mark.asyncio
+    async def test_first_successful_enqueue_sets_event(self):
+        coord = _make_coordinator()
+        calls = []
+
+        async def fake_call(domain, service, data, target=None, blocking=False):
+            calls.append(data["media_id"])
+            if data["media_id"] == "One":
+                raise RuntimeError("fail")
+            assert coord.first_track_queued.is_set() is False
+
+        coord.hass.services.async_call = fake_call
+        await coord._enqueue_tracks(
+            [{"artist": "A", "title": "One"}, {"artist": "B", "title": "Two"}],
+            clear_first=True,
+        )
+        assert coord.first_track_queued.is_set()

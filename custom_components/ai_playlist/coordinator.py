@@ -172,6 +172,10 @@ class PlaylistCoordinator:
         self._last_queue_check: float = 0.0
         self._last_recorded_track: tuple[str, str] | None = None
         self._last_internal_queue_clear: float = 0.0
+        # Set once the first track of the session is on the queue, so the play
+        # service can return (and the UI update) without waiting for the whole
+        # batch — resolving the rest can take minutes under provider rate limits
+        self.first_track_queued = asyncio.Event()
         self._initial_enqueue_count: int = 0
         self._queue_id: str | None = None
         self._start_task: asyncio.Task | None = None
@@ -594,6 +598,7 @@ class PlaylistCoordinator:
         self.enqueued_tracks.append(track_dict_to_string(track))
         if replace:
             self._last_internal_queue_clear = time.monotonic()
+        self.first_track_queued.set()
         return True
 
     async def _check_queue_depth(self) -> tuple[int, int]:

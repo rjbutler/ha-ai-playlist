@@ -1,4 +1,5 @@
 """The AI Playlist integration."""
+import asyncio
 import hashlib
 import logging
 
@@ -21,6 +22,43 @@ from .sensor import get_or_create_sensor, get_sensor
 from .store import PlaylistStore
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def _start_until_first_track(
+    hass: HomeAssistant,
+    coordinator: PlaylistCoordinator,
+    entity_id: str,
+    clear_queue: bool,
+    track_count: int | None,
+) -> None:
+    """Start a session, returning once its first track is queued.
+
+    The rest of the batch keeps resolving/enqueuing in the background. Waiting
+    for the whole batch held callers (and the dashboard state they update) for
+    minutes while Apple Music rate-limited searches. A start that fails before
+    queuing anything still raises to the caller.
+    """
+    start_task = hass.async_create_task(
+        coordinator.async_start(clear_queue=clear_queue, track_count=track_count),
+        f"ai_playlist start {entity_id}",
+    )
+    first_track = asyncio.ensure_future(coordinator.first_track_queued.wait())
+    try:
+        await asyncio.wait({start_task, first_track}, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        first_track.cancel()
+    if start_task.done():
+        start_task.result()
+    else:
+        start_task.add_done_callback(_log_background_start_error)
+
+
+def _log_background_start_error(task: asyncio.Task) -> None:
+    """Log a session start that failed after the play service already returned."""
+    if task.cancelled():
+        return
+    if (err := task.exception()) is not None:
+        _LOGGER.error("Playlist session start failed in background", exc_info=err)
 
 SERVICE_PLAY = "play"
 SERVICE_STOP = "stop"
@@ -256,10 +294,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             coordinator.ai_entity_id = ai_entity_override
         coordinators[entity_id] = coordinator
 
-        await coordinator.async_start(
-            clear_queue=clear_queue,
-            track_count=track_count,
-        )
+        await _start_until_first_track(hass, coordinator, entity_id, clear_queue, track_count)
 
         await store.set_active_session(entity_id, config.get("name", ""), collection_name)
 
