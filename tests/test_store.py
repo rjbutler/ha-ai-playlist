@@ -331,6 +331,13 @@ class TestTrackUriCache:
 
     @pytest.mark.asyncio
     async def test_loaded_from_storage(self, tmp_store):
-        tmp_store._uri_store.async_load = AsyncMock(return_value={"tracks": {"a - one": "u:1"}})
+        tmp_store._uri_store.async_load = AsyncMock(return_value={"tracks_v2": {"a - one": "u:1"}})
         await tmp_store.async_load()
         assert tmp_store.get_track_uri("A - One") == "u:1"
+
+    @pytest.mark.asyncio
+    async def test_pre_b9_cache_is_dropped(self, tmp_store):
+        # The old picker could cache live takes for studio requests
+        tmp_store._uri_store.async_load = AsyncMock(return_value={"tracks": {"a - one": "u:live"}})
+        await tmp_store.async_load()
+        assert tmp_store.get_track_uri("A - One") is None

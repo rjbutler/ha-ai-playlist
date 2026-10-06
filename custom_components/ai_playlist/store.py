@@ -28,6 +28,8 @@ from .track_processing import normalize_track
 _LOGGER = logging.getLogger(__name__)
 
 
+_URI_CACHE_KEY = "tracks_v2"
+
 class PlaylistStore:
     """Manages playlist configs and track history persistence."""
 
@@ -67,7 +69,10 @@ class PlaylistStore:
 
         uri_data = await self._uri_store.async_load()
         if uri_data:
-            self._track_uris = uri_data.get("tracks", {})
+            # "tracks_v2": the pre-b9 picker could cache a live take for a
+            # studio request and entries don't record which, so the old
+            # "tracks" map is dropped and re-resolved lazily.
+            self._track_uris = uri_data.get(_URI_CACHE_KEY, {})
 
     async def _async_save(self) -> None:
         """Save playlist configs to HA storage."""
@@ -326,7 +331,7 @@ class PlaylistStore:
 
     def _schedule_uri_save(self) -> None:
         self._uri_store.async_delay_save(
-            lambda: {"tracks": self._track_uris}, URI_CACHE_SAVE_DELAY
+            lambda: {_URI_CACHE_KEY: self._track_uris}, URI_CACHE_SAVE_DELAY
         )
 
     # --- Async wrappers (lock-protected, executor-dispatched) ---

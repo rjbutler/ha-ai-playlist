@@ -17,6 +17,7 @@ from .const import (
     DOMAIN,
     ENQUEUE_TIMEOUT,
     EXCLUDE_LIVE_DIRECTIVE,
+    SEARCH_LIMIT,
     SEARCH_TIMEOUT,
     STATE_ENQUEUING,
     STATE_ERROR,
@@ -486,10 +487,48 @@ class PlaylistCoordinator:
                 return entry.entry_id
         return None
 
+    async def _search_tracks(
+        self, entry_id: str, track: dict, library_only: bool
+    ) -> list[dict] | None:
+        """music_assistant.search for one track; None on error/timeout.
+
+        No `album` in the query: HA builds "artist - album - name", which
+        defeats MA's library exact-match shortcut. SEARCH_LIMIT stays constant
+        because it is part of MA's search cache key.
+        """
+        try:
+            response = await asyncio.wait_for(
+                self.hass.services.async_call(
+                    "music_assistant",
+                    "search",
+                    {
+                        "config_entry_id": entry_id,
+                        "name": track["title"],
+                        "artist": track["artist"],
+                        "media_type": ["track"],
+                        "limit": SEARCH_LIMIT,
+                        "library_only": library_only,
+                    },
+                    blocking=True,
+                    return_response=True,
+                ),
+                timeout=SEARCH_TIMEOUT,
+            )
+        except Exception as err:  # noqa: BLE001 — includes TimeoutError
+            _LOGGER.debug(
+                "Search failed for %s (library_only=%s): %r",
+                track_dict_to_string(track), library_only, err,
+            )
+            return None
+        return response.get("tracks", []) if isinstance(response, dict) else []
+
     async def _resolve_track_uri(self, track: dict) -> str | None:
         """Resolve a generated track to a playable MA URI, using the cache first.
 
-        Uncached tracks cost one track-only search. Queueing by URI keeps MA's
+        Then the MA library (local, no provider API call); only when that has
+        no cacheable pick (artist + title match, live-ness matching the
+        request) does it run a full search, which costs a provider call — the
+        one that trips Apple Music's rate limiter. Queueing by URI keeps MA's
         play_media from running its own library + global search per track.
         """
         track_str = track_dict_to_string(track)
@@ -501,34 +540,23 @@ class PlaylistCoordinator:
             _LOGGER.warning("Music Assistant not loaded — cannot resolve %s", track_str)
             return None
 
-        try:
-            response = await asyncio.wait_for(
-                self.hass.services.async_call(
-                    "music_assistant",
-                    "search",
-                    {
-                        "config_entry_id": entry_id,
-                        "name": track["title"],
-                        "artist": track["artist"],
-                        "media_type": ["track"],
-                        "limit": 5,
-                    },
-                    blocking=True,
-                    return_response=True,
-                ),
-                timeout=SEARCH_TIMEOUT,
-            )
-        except Exception as err:  # noqa: BLE001 — includes TimeoutError
-            _LOGGER.debug("Search failed for %s: %r", track_str, err)
-            return None
-
-        results = response.get("tracks", []) if isinstance(response, dict) else []
-        uri, confident = pick_track_uri(results, track)
-        if uri and confident:
-            # Only artist-matched picks are cached: a title-only or fallback
-            # pick (e.g. an AI-invented track) is played but re-searched next
-            # time rather than pinned forever
+        uri, cacheable = None, False
+        results = await self._search_tracks(entry_id, track, library_only=True)
+        if results:
+            uri, cacheable = pick_track_uri(results, track, self.exclude_live)
+        if not cacheable:
+            full = await self._search_tracks(entry_id, track, library_only=False)
+            if full:
+                uri, cacheable = pick_track_uri(full, track, self.exclude_live)
+                results = full
+            # full search failed/empty: keep any (uncached) library pick
+        if uri and cacheable:
+            # Only artist-matched picks whose live-ness matches the request are
+            # cached: a title-only/fallback pick (e.g. an AI-invented track) or
+            # a live take is played but re-searched next time, not pinned
             self.store.set_track_uri(track_str, uri)
+        elif uri is None and self.exclude_live and results:
+            _LOGGER.debug("Only live versions found for %s (exclude_live)", track_str)
         return uri
 
     async def _enqueue_tracks(self, tracks: list[dict], clear_first: bool) -> None:

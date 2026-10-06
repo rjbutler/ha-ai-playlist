@@ -241,9 +241,69 @@ class TestResolveTrackUri:
         coord.store.set_track_uri.assert_called_once_with(
             "The Jam - Town Called Malice", "apple_music://track/9"
         )
+        # library hit: one call, no provider (Apple) search
+        coord.hass.services.async_call.assert_called_once()
         data = coord.hass.services.async_call.call_args.args[2]
         assert data["media_type"] == ["track"]
         assert data["config_entry_id"] == "ma_entry"
+        assert data["library_only"] is True
+        assert "album" not in data
+
+    @pytest.mark.asyncio
+    async def test_library_miss_falls_back_to_full_search(self):
+        coord = _make_coordinator()
+        coord.store.get_track_uri.side_effect = None
+        coord.store.get_track_uri.return_value = None
+        coord._get_mass_entry_id = MagicMock(return_value="ma_entry")
+        hit = {"uri": "apple_music://track/9", "name": "Town Called Malice",
+               "artists": [{"name": "The Jam"}]}
+        coord.hass.services.async_call = AsyncMock(side_effect=[{"tracks": []}, {"tracks": [hit]}])
+
+        uri = await coord._resolve_track_uri({"artist": "The Jam", "title": "Town Called Malice"})
+
+        assert uri == "apple_music://track/9"
+        calls = coord.hass.services.async_call.call_args_list
+        assert [c.args[2]["library_only"] for c in calls] == [True, False]
+        coord.store.set_track_uri.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_full_search_failure_keeps_uncached_library_pick(self):
+        coord = _make_coordinator()
+        coord.store.get_track_uri.side_effect = None
+        coord.store.get_track_uri.return_value = None
+        coord._get_mass_entry_id = MagicMock(return_value="ma_entry")
+        cover = {"uri": "library://track/3", "name": "Town Called Malice",
+                 "artists": [{"name": "Cover Band"}]}
+        coord.hass.services.async_call = AsyncMock(
+            side_effect=[{"tracks": [cover]}, TimeoutError()]
+        )
+
+        uri = await coord._resolve_track_uri({"artist": "The Jam", "title": "Town Called Malice"})
+
+        assert uri == "library://track/3"
+        coord.store.set_track_uri.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_exclude_live_skips_live_only_library_and_finds_studio(self):
+        coord = _make_coordinator()
+        coord.store.get_track_uri.side_effect = None
+        coord.store.get_track_uri.return_value = None
+        coord._get_mass_entry_id = MagicMock(return_value="ma_entry")
+        coord.playlist_config = {**(coord.playlist_config or {}), "exclude_live": True}
+        live = {"uri": "library://track/1", "name": "My Generation", "version": "Live",
+                "artists": [{"name": "The Who"}]}
+        studio = {"uri": "apple_music://track/2", "name": "My Generation", "version": "",
+                  "artists": [{"name": "The Who"}]}
+        coord.hass.services.async_call = AsyncMock(
+            side_effect=[{"tracks": [live]}, {"tracks": [live, studio]}]
+        )
+
+        uri = await coord._resolve_track_uri({"artist": "The Who", "title": "My Generation"})
+
+        assert uri == "apple_music://track/2"
+        coord.store.set_track_uri.assert_called_once_with(
+            "The Who - My Generation", "apple_music://track/2"
+        )
 
     @pytest.mark.asyncio
     async def test_unconfident_pick_plays_but_is_not_cached(self):

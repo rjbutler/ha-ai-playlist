@@ -657,6 +657,56 @@ class TestPickTrackUri:
         track = {"artist": "Wings", "title": "Live and Let Die"}
         assert pick_track_uri(results, track) == ("u:wings", True)
 
+    def test_exclude_live_drops_live_even_when_it_is_the_only_artist_match(self):
+        # The 2026-10-05 case: studio take is credited to CSNY, so only the
+        # live CSN take matched the AI's artist — ranking alone picked it.
+        results = [
+            _result("u:live", "Crosby, Stills & Nash", "Teach Your Children (Live)", "CSN 2012"),
+            _result("u:studio", "Crosby, Stills, Nash & Young", "Teach Your Children", "Déjà Vu"),
+        ]
+        track = {"artist": "Crosby, Stills & Nash", "title": "Teach Your Children"}
+        assert pick_track_uri(results, track)[0] == "u:live"
+        assert pick_track_uri(results, track, exclude_live=True) == ("u:studio", False)
+
+    def test_exclude_live_with_only_live_results_resolves_nothing(self):
+        results = [_result("u:live", "The Who", "My Generation (Live at Leeds)")]
+        track = {"artist": "The Who", "title": "My Generation"}
+        assert pick_track_uri(results, track, exclude_live=True) == (None, False)
+
+    def test_exclude_live_detects_live_album(self):
+        results = [
+            _result("u:leeds", "The Who", "Substitute", "Live at Leeds"),
+            _result("u:single", "The Who", "Substitute", "Meaty Beaty Big and Bouncy"),
+        ]
+        track = {"artist": "The Who", "title": "Substitute"}
+        assert pick_track_uri(results, track, exclude_live=True) == ("u:single", True)
+
+    def test_exclude_live_keeps_live_request(self):
+        results = [_result("u:live", "The Who", "My Generation (Live at Leeds)")]
+        track = {"artist": "The Who", "title": "My Generation (Live at Leeds)"}
+        assert pick_track_uri(results, track, exclude_live=True) == ("u:live", True)
+
+    def test_live_and_let_die_album_is_not_live(self):
+        results = [_result("u:wings", "Wings", "Live and Let Die", "Live and Let Die")]
+        track = {"artist": "Wings", "title": "Live and Let Die"}
+        assert pick_track_uri(results, track, exclude_live=True) == ("u:wings", True)
+
+    def test_live_pick_for_studio_request_is_not_cacheable(self):
+        # Played (no exclude_live), but must not pin a live take in the shared
+        # cache, which also serves exclude_live playlists.
+        results = [_result("u:live", "The Who", "My Generation (Live at Leeds)")]
+        track = {"artist": "The Who", "title": "My Generation"}
+        assert pick_track_uri(results, track) == ("u:live", False)
+
+    def test_exclude_live_uses_ma_version_field(self):
+        # Real MA 2.10 shape: "(Live)" lives in `version`, name is clean
+        live = _result("u:live", "Crosby, Stills & Nash", "Teach Your Children", "Some Album")
+        live["version"] = "Live at Live Aid, John F. Kennedy Stadium, 13th July 1985"
+        bonus = _result("u:bonus", "Crosby, Stills & Nash", "Teach Your Children", "CSN (Deluxe)")
+        bonus["version"] = "Bonus Track"
+        track = {"artist": "Crosby, Stills & Nash", "title": "Teach Your Children"}
+        assert pick_track_uri([live, bonus], track, exclude_live=True) == ("u:bonus", True)
+
     def test_title_only_match_is_not_confident(self):
         results = [_result("u:cover", "Cover Band", "Blitzkrieg Bop")]
         track = {"artist": "Ramones", "title": "Blitzkrieg Bop"}

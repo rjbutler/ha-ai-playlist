@@ -19,6 +19,10 @@ ENQUEUE_TIMEOUT: Final = 30
 # retry pass after URI_RETRY_DELAY (MA keeps a timed-out search running in
 # the background, so the retry often lands on a warm result).
 SEARCH_TIMEOUT: Final = 30
+# Results per search. 10 rather than MA's default 5 so a studio take is more
+# likely among the candidates when live versions crowd the top (exclude_live).
+# Keep it constant: it is part of MA's per-provider search cache key.
+SEARCH_LIMIT: Final = 10
 URI_RETRY_DELAY: Final = 10
 URI_CACHE_MAX: Final = 5000
 URI_CACHE_SAVE_DELAY: Final = 30

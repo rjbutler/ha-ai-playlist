@@ -109,12 +109,44 @@ def queue_item_to_track_string(item) -> str:
 _LIVE_MARKER = re.compile(r"[\(\[][^\)\]]*\blive\b|\s-\s.*\blive\b", re.IGNORECASE)
 
 
+# Live album names: "Live at Leeds", "Unplugged (Live)", "Rust Never Sleeps - Live".
+# A bare leading "Live" is not matched ("Live and Let Die" is a studio album).
+_LIVE_ALBUM_MARKER = re.compile(
+    r"[\(\[][^\)\]]*\blive\b|\blive\s+(?:at|in|from|on)\b|\s-\s.*\blive\b|\blive\s*$",
+    re.IGNORECASE,
+)
+
+
 def _is_live_title(title: str) -> bool:
     """Whether a raw title marks a live recording, e.g. 'Song (Live at X)'."""
     return bool(title) and bool(_LIVE_MARKER.search(title))
 
 
-def pick_track_uri(results: list[dict], track: dict) -> tuple[str | None, bool]:
+_LIVE_WORD = re.compile(r"\blive\b", re.IGNORECASE)
+
+
+def _is_live_result(result: dict) -> bool:
+    """Whether an MA search result is a live recording.
+
+    MA's provider parsers move "(Live ...)" out of the name into `version`
+    (e.g. name "Teach Your Children", version "Live"), so `version` is the
+    primary signal; the name and album name are checked too.
+    """
+    album = result.get("album") or {}
+    if not isinstance(album, dict):
+        album = {}
+    for version in (result.get("version"), album.get("version")):
+        if version and _LIVE_WORD.search(str(version)):
+            return True
+    if _is_live_title(result.get("name", "")):
+        return True
+    album_name = album.get("name", "")
+    return bool(album_name) and bool(_LIVE_ALBUM_MARKER.search(album_name))
+
+
+def pick_track_uri(
+    results: list[dict], track: dict, exclude_live: bool = False
+) -> tuple[str | None, bool]:
     """Pick the best-matching track URI from music_assistant.search results.
 
     Returns (uri, confident). Preference: artist+title match (album match
@@ -122,18 +154,25 @@ def pick_track_uri(results: list[dict], track: dict) -> tuple[str | None, bool]:
     the last mirrors what MA's own name lookup would have played. Within a
     tier, a live version ranks below a studio one unless the request itself
     is live (normalize_track strips "(Live ...)", so it can't tell them
-    apart). `confident` is True only when the artist matched; callers should
-    not cache a title-only or fallback pick. Returns (None, False) if no
-    result carries a URI.
+    apart). With exclude_live and a studio request, live results (by title or
+    album) are dropped outright — ranking alone let a live take win whenever
+    a thin search had no same-tier studio result.
+
+    Returns (uri, cacheable): cacheable is True only when the artist matched
+    and the pick's live-ness matches the request, so the shared URI cache
+    never serves a live take for a studio request (or a title-only/fallback
+    pick). Returns (None, False) if no usable result carries a URI.
     """
     candidates = [r for r in results if isinstance(r, dict) and r.get("uri")]
+    want_live = _is_live_title(track.get("title", ""))
+    if exclude_live and not want_live:
+        candidates = [r for r in candidates if not _is_live_result(r)]
     if not candidates:
         return None, False
 
     want_artist = normalize_track(track.get("artist", ""))
     want_title = normalize_track(track.get("title", ""))
     want_album = normalize_track(track.get("album", ""))
-    want_live = _is_live_title(track.get("title", ""))
 
     def fields(result: dict) -> tuple[str, str, str]:
         artists = result.get("artists") or []
@@ -160,11 +199,11 @@ def pick_track_uri(results: list[dict], track: dict) -> tuple[str | None, bool]:
             rank = 3
         else:
             rank = 4
-        live_mismatch = _is_live_title(result.get("name", "")) != want_live
+        live_mismatch = _is_live_result(result) != want_live
         scored.append((rank, live_mismatch, index, result["uri"]))
     scored.sort()
-    best_rank, _, _, uri = scored[0]
-    return uri, best_rank <= 2
+    best_rank, best_mismatch, _, uri = scored[0]
+    return uri, best_rank <= 2 and not best_mismatch
 
 
 def merge_track_lists(base: list[str], extra: list[str]) -> list[str]:
