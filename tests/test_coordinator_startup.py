@@ -284,6 +284,29 @@ class TestResolveTrackUri:
         coord.store.set_track_uri.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_all_live_full_search_keeps_uncached_library_pick(self):
+        coord = _make_coordinator({"name": "Test Playlist", "exclude_live": True})
+        coord.store.get_track_uri.side_effect = None
+        coord.store.get_track_uri.return_value = None
+        coord._get_mass_entry_id = MagicMock(return_value="ma_entry")
+        # title-only studio match in the library (not cacheable) ...
+        lib = {"uri": "library://track/5", "name": "Teach Your Children", "version": "",
+               "artists": [{"name": "Crosby, Stills, Nash & Young"}]}
+        # ... and a full search that only returns live takes
+        live = {"uri": "apple_music://track/6", "name": "Teach Your Children", "version": "Live",
+                "artists": [{"name": "Crosby, Stills & Nash"}]}
+        coord.hass.services.async_call = AsyncMock(
+            side_effect=[{"tracks": [lib]}, {"tracks": [live]}]
+        )
+
+        uri = await coord._resolve_track_uri(
+            {"artist": "Crosby, Stills & Nash", "title": "Teach Your Children"}
+        )
+
+        assert uri == "library://track/5"
+        coord.store.set_track_uri.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_exclude_live_skips_live_only_library_and_finds_studio(self):
         coord = _make_coordinator()
         coord.store.get_track_uri.side_effect = None

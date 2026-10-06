@@ -547,7 +547,11 @@ class PlaylistCoordinator:
         if not cacheable:
             full = await self._search_tracks(entry_id, track, library_only=False)
             if full:
-                uri, cacheable = pick_track_uri(full, track, self.exclude_live)
+                full_uri, full_cacheable = pick_track_uri(full, track, self.exclude_live)
+                # Keep an uncached library pick unless the full search found a
+                # usable one (it can come back all-live under exclude_live)
+                if full_uri:
+                    uri, cacheable = full_uri, full_cacheable
                 results = full
             # full search failed/empty: keep any (uncached) library pick
         if uri and cacheable:
